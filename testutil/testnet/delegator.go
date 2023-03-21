@@ -33,7 +33,7 @@ func (dpk DelegatorPrivKeys) BaseAccounts() BaseAccounts {
 		const sequenceNumber = 0
 
 		ba[i] = authtypes.NewBaseAccount(
-			pubKey.Address().Bytes(), pubKey, accountNumber, sequenceNumber,
+			pubKey.Address().Bytes(), nil, accountNumber, sequenceNumber,
 		)
 	}
 

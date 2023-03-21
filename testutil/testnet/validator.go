@@ -7,9 +7,9 @@ import (
 	cmted25519 "github.com/cometbft/cometbft/crypto/ed25519"
 	cmttypes "github.com/cometbft/cometbft/types"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
-	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	cryptocodec "github.com/cosmos/cosmos-sdk/crypto/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 )
@@ -91,4 +91,23 @@ func (sv StakingValidators) BondedPoolBalance() banktypes.Balance {
 		Address: authtypes.NewModuleAddress(stakingtypes.BondedPoolName).String(),
 		Coins:   coins,
 	}
+}
+
+func (sv StakingValidators) BaseAccounts() BaseAccounts {
+	ba := make(BaseAccounts, len(sv))
+
+	for i, v := range sv {
+		const accountNumber = 0
+		const sequenceNumber = 0
+
+		addrBytes, err := sdk.GetFromBech32(v.OperatorAddress, sdk.Bech32PrefixValAddr)
+		if err != nil {
+			panic(err)
+		}
+		ba[i] = authtypes.NewBaseAccount(
+			sdk.AccAddress(addrBytes), nil, accountNumber, sequenceNumber,
+		)
+	}
+
+	return ba
 }

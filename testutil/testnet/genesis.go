@@ -14,6 +14,7 @@ import (
 	authsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
 	"github.com/cosmos/cosmos-sdk/x/auth/tx"
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
+	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	consensusparamtypes "github.com/cosmos/cosmos-sdk/x/consensus/types"
 	genutiltypes "github.com/cosmos/cosmos-sdk/x/genutil/types"
@@ -35,6 +36,8 @@ func NewGenesisBuilder() *GenesisBuilder {
 	ir := codectypes.NewInterfaceRegistry()
 	cryptocodec.RegisterInterfaces(ir)
 	stakingtypes.RegisterInterfaces(ir)
+	banktypes.RegisterInterfaces(ir)
+	authtypes.RegisterInterfaces(ir)
 	pCodec := codec.NewProtoCodec(ir)
 
 	return &GenesisBuilder{
@@ -140,6 +143,22 @@ func (b *GenesisBuilder) ChainID(id string) *GenesisBuilder {
 	return b
 }
 
+func (b *GenesisBuilder) AuthParams(params authtypes.Params) *GenesisBuilder {
+	j, err := json.Marshal(map[string]any{
+		"params": params,
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	b.appState[authtypes.ModuleName] = j
+	return b
+}
+
+func (b *GenesisBuilder) DefaultAuthParams() *GenesisBuilder {
+	return b.AuthParams(authtypes.DefaultParams())
+}
+
 func (b *GenesisBuilder) Consensus(params *cmttypes.ConsensusParams, vals CometGenesisValidators) *GenesisBuilder {
 	if params == nil {
 		params = cmttypes.DefaultConsensusParams()
@@ -172,6 +191,29 @@ func (b *GenesisBuilder) Staking(
 	if err != nil {
 		panic(err)
 	}
+
+	// Modify bank state for bonded pool.
+
+	var coins sdk.Coins
+	for _, v := range vals {
+		coins = coins.Add(sdk.NewCoin(sdk.DefaultBondDenom, v.Tokens))
+	}
+
+	bondedPoolBalance := banktypes.Balance{
+		Address: authtypes.NewModuleAddress(stakingtypes.BondedPoolName).String(),
+		Coins:   coins,
+	}
+
+	// get bank types genesis, add account
+
+	bankGenesis := banktypes.GetGenesisStateFromAppState(b.codec, b.appState)
+	bankGenesis.Balances = append(bankGenesis.Balances, bondedPoolBalance)
+
+	jBankGenesis, err := b.codec.MarshalJSON(bankGenesis)
+	if err != nil {
+		panic(err)
+	}
+	b.appState[banktypes.ModuleName] = jBankGenesis
 
 	return b
 }
@@ -211,6 +253,45 @@ func (b *GenesisBuilder) Banking(
 	if err != nil {
 		panic(err)
 	}
+	return b
+}
+
+func (b *GenesisBuilder) BaseAccounts(ba BaseAccounts, balances []banktypes.Balance) *GenesisBuilder {
+	// Logic mostly copied from AddGenesisAccount.
+
+	authGenState := authtypes.GetGenesisStateFromAppState(b.codec, b.appState)
+	bankGenState := banktypes.GetGenesisStateFromAppState(b.codec, b.appState)
+
+	accs, err := authtypes.UnpackAccounts(authGenState.Accounts)
+	if err != nil {
+		panic(err)
+	}
+
+	for _, a := range ba {
+		accs = append(accs, a)
+	}
+	accs = authtypes.SanitizeGenesisAccounts(accs)
+
+	genAccs, err := authtypes.PackAccounts(accs)
+	if err != nil {
+		panic(err)
+	}
+
+	authGenState.Accounts = genAccs
+	jAuthGenState, err := b.codec.MarshalJSON(&authGenState)
+	if err != nil {
+		panic(err)
+	}
+	b.appState[authtypes.ModuleName] = jAuthGenState
+
+	bankGenState.Balances = append(bankGenState.Balances, balances...)
+	bankGenState.Balances = banktypes.SanitizeGenesisBalances(bankGenState.Balances)
+
+	jBankState, err := b.codec.MarshalJSON(bankGenState)
+	if err != nil {
+		panic(err)
+	}
+	b.appState[banktypes.ModuleName] = jBankState
 	return b
 }
 

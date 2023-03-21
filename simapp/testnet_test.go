@@ -29,25 +29,25 @@ func TestTestnet(t *testing.T) {
 
 	valPKs := testnet.NewValidatorPrivKeys(nVals)
 	cmtVals := valPKs.CometGenesisValidators()
-	stakingVals, valSupply := cmtVals.StakingValidators()
+	stakingVals, _ := cmtVals.StakingValidators()
+	valBaseAccounts := stakingVals.BaseAccounts()
 
 	delPKs := testnet.NewDelegatorPrivKeys(nVals)
-	baseAccounts := delPKs.BaseAccounts()
-	delegations := baseAccounts.Delegations(cmtVals)
+	delBaseAccounts := delPKs.BaseAccounts()
+	delegations := delBaseAccounts.Delegations(cmtVals)
 
-	balances, balanceSupply := baseAccounts.Balances(
+	balances, _ := delBaseAccounts.Balances(
 		sdk.NewCoins(sdk.NewCoin(sdk.DefaultBondDenom, sdkmath.NewInt(10_000_000_000_000_000))),
 	)
 
-	balances = append(balances, stakingVals.BondedPoolBalance())
-
-	totalSupply := balanceSupply.Add(valSupply...)
+	allBaseAccounts := append(valBaseAccounts, delBaseAccounts...)
 
 	b := testnet.NewGenesisBuilder().
 		ChainID(chainID).
+		DefaultAuthParams().
 		Consensus(nil, cmtVals).
-		StakingWithDefaultParams(stakingVals, delegations).
-		BankingWithDefaultParams(balances, totalSupply, nil, nil)
+		BaseAccounts(allBaseAccounts, balances).
+		StakingWithDefaultParams(stakingVals, delegations)
 
 	for i, v := range valPKs {
 		b.GenTx(v, cmtVals[i], sdk.NewCoin(sdk.DefaultBondDenom, sdk.DefaultPowerReduction))
