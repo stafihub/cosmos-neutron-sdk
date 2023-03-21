@@ -33,7 +33,7 @@ func (dpk DelegatorPrivKeys) BaseAccounts() BaseAccounts {
 		const sequenceNumber = 0
 
 		ba[i] = authtypes.NewBaseAccount(
-			pubKey.Address().Bytes(), nil, accountNumber, sequenceNumber,
+			pubKey.Address().Bytes(), pubKey, accountNumber, sequenceNumber,
 		)
 	}
 
@@ -66,7 +66,7 @@ func (ba BaseAccounts) Delegations(vals CometGenesisValidators) []stakingtypes.D
 	for i, a := range ba {
 		ds[i] = stakingtypes.NewDelegation(
 			a.GetAddress(),
-			vals[i].Address.Bytes(),
+			vals[i].V.Address.Bytes(),
 			sdkmath.LegacyOneDec(),
 		)
 	}

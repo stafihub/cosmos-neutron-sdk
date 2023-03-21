@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 
-	cmted25519 "github.com/cometbft/cometbft/crypto/ed25519"
 	cmttypes "github.com/cometbft/cometbft/types"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	cryptocodec "github.com/cosmos/cosmos-sdk/crypto/codec"
+	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
 	authsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
@@ -49,7 +49,7 @@ func NewGenesisBuilder() *GenesisBuilder {
 	}
 }
 
-func (b *GenesisBuilder) GenTx(privVal cmted25519.PrivKey, val cmttypes.GenesisValidator, amount sdk.Coin) *GenesisBuilder {
+func (b *GenesisBuilder) GenTx(privVal secp256k1.PrivKey, val cmttypes.GenesisValidator, amount sdk.Coin) *GenesisBuilder {
 	if b.chainID == "" {
 		panic(fmt.Errorf("(*GenesisBuilder).GenTx called before (*GenesisBuilder).ChainID"))
 	}
@@ -96,8 +96,8 @@ func (b *GenesisBuilder) GenTx(privVal cmted25519.PrivKey, val cmttypes.GenesisV
 		signing.SignMode_SIGN_MODE_DIRECT,
 		authsigning.SignerData{
 			ChainID: b.chainID,
-			PubKey:  pubKey,
-			Address: sdk.ValAddress(val.Address).String(), // TODO: this relies on global bech32 config.
+			PubKey:  privVal.PubKey(),
+			Address: sdk.MustBech32ifyAddressBytes("cosmos1", privVal.PubKey().Address()), // TODO: don't hardcode cosmos1!
 
 			// No account or sequence number for gentx.
 		},
@@ -116,7 +116,7 @@ func (b *GenesisBuilder) GenTx(privVal cmted25519.PrivKey, val cmttypes.GenesisV
 	// Set the signature on the builder.
 	if err := txb.SetSignatures(
 		signing.SignatureV2{
-			PubKey: pubKey,
+			PubKey: privVal.PubKey(),
 			Data: &signing.SingleSignatureData{
 				SignMode:  signMode,
 				Signature: signed,
@@ -163,10 +163,11 @@ func (b *GenesisBuilder) Consensus(params *cmttypes.ConsensusParams, vals CometG
 	if params == nil {
 		params = cmttypes.DefaultConsensusParams()
 	}
+
 	var err error
 	b.outer[consensusparamtypes.ModuleName], err = (&genutiltypes.ConsensusGenesis{
 		Params:     params,
-		Validators: vals,
+		Validators: vals.ToComet(),
 	}).MarshalJSON()
 	if err != nil {
 		panic(err)
@@ -186,7 +187,7 @@ func (b *GenesisBuilder) Staking(
 ) *GenesisBuilder {
 	var err error
 	b.appState[stakingtypes.ModuleName], err = b.codec.MarshalJSON(
-		stakingtypes.NewGenesisState(params, vals, delegations),
+		stakingtypes.NewGenesisState(params, vals.ToStakingType(), delegations),
 	)
 	if err != nil {
 		panic(err)
@@ -196,7 +197,7 @@ func (b *GenesisBuilder) Staking(
 
 	var coins sdk.Coins
 	for _, v := range vals {
-		coins = coins.Add(sdk.NewCoin(sdk.DefaultBondDenom, v.Tokens))
+		coins = coins.Add(sdk.NewCoin(sdk.DefaultBondDenom, v.V.Tokens))
 	}
 
 	bondedPoolBalance := banktypes.Balance{

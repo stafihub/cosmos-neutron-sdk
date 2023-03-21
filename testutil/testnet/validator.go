@@ -8,19 +8,28 @@ import (
 	cmttypes "github.com/cometbft/cometbft/types"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	cryptocodec "github.com/cosmos/cosmos-sdk/crypto/codec"
+	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 )
 
-type ValidatorPrivKeys []cmted25519.PrivKey
+type ValidatorPrivKeys []*ValidatorPrivKey
+
+type ValidatorPrivKey struct {
+	Val cmted25519.PrivKey
+	Del *secp256k1.PrivKey
+}
 
 func NewValidatorPrivKeys(n int) ValidatorPrivKeys {
 	vpk := make(ValidatorPrivKeys, n)
 
 	for i := range vpk {
-		vpk[i] = cmted25519.GenPrivKey()
+		vpk[i] = &ValidatorPrivKey{
+			Val: cmted25519.GenPrivKey(),
+			Del: secp256k1.GenPrivKey(),
+		}
 	}
 
 	return vpk
@@ -30,28 +39,44 @@ func (vpk ValidatorPrivKeys) CometGenesisValidators() CometGenesisValidators {
 	cgv := make(CometGenesisValidators, len(vpk))
 
 	for i, pk := range vpk {
-		pubKey := pk.PubKey()
+		pubKey := pk.Val.PubKey()
 
 		const votingPower = 1
 		cmtVal := cmttypes.NewValidator(pubKey, votingPower)
 
-		cgv[i] = cmttypes.GenesisValidator{
-			Address: cmtVal.Address,
-			PubKey:  cmtVal.PubKey,
-			Power:   cmtVal.VotingPower,
-			Name:    fmt.Sprintf("val-%d", i),
+		cgv[i] = &CometGenesisValidator{
+			V: cmttypes.GenesisValidator{
+				Address: cmtVal.Address,
+				PubKey:  cmtVal.PubKey,
+				Power:   cmtVal.VotingPower,
+				Name:    fmt.Sprintf("val-%d", i),
+			},
+			PK: pk,
 		}
 	}
 
 	return cgv
 }
 
-type CometGenesisValidators []cmttypes.GenesisValidator
+type CometGenesisValidators []*CometGenesisValidator
+
+type CometGenesisValidator struct {
+	V  cmttypes.GenesisValidator
+	PK *ValidatorPrivKey
+}
+
+func (cgv CometGenesisValidators) ToComet() []cmttypes.GenesisValidator {
+	vs := make([]cmttypes.GenesisValidator, len(cgv))
+	for i, v := range cgv {
+		vs[i] = v.V
+	}
+	return vs
+}
 
 func (cgv CometGenesisValidators) StakingValidators() (vals StakingValidators, supply sdk.Coins) {
 	vals = make(StakingValidators, len(cgv))
 	for i, v := range cgv {
-		pk, err := cryptocodec.FromCmtPubKeyInterface(v.PubKey)
+		pk, err := cryptocodec.FromCmtPubKeyInterface(v.V.PubKey)
 		if err != nil {
 			panic(fmt.Errorf("failed to extract comet pub key: %w", err))
 		}
@@ -61,15 +86,18 @@ func (cgv CometGenesisValidators) StakingValidators() (vals StakingValidators, s
 			panic(fmt.Errorf("failed to wrap pub key in any type: %w", err))
 		}
 
-		vals[i] = stakingtypes.Validator{
-			OperatorAddress:   sdk.ValAddress(v.Address).String(), // TODO: this relies on global bech32 config.
-			ConsensusPubkey:   pkAny,
-			Status:            stakingtypes.Bonded,
-			Tokens:            sdk.DefaultPowerReduction,
-			DelegatorShares:   sdkmath.LegacyOneDec(),
-			MinSelfDelegation: sdkmath.ZeroInt(),
+		vals[i] = &StakingValidator{
+			V: stakingtypes.Validator{
+				OperatorAddress:   sdk.ValAddress(v.V.Address).String(), // TODO: this relies on global bech32 config.
+				ConsensusPubkey:   pkAny,
+				Status:            stakingtypes.Bonded,
+				Tokens:            sdk.DefaultPowerReduction,
+				DelegatorShares:   sdkmath.LegacyOneDec(),
+				MinSelfDelegation: sdkmath.ZeroInt(),
 
-			// more fields uncopied from testutil/sims/app_helpers.go:220
+				// more fields uncopied from testutil/sims/app_helpers.go:220
+			},
+			PK: v.PK,
 		}
 
 		supply = supply.Add(sdk.NewCoin(sdk.DefaultBondDenom, sdk.DefaultPowerReduction))
@@ -78,13 +106,26 @@ func (cgv CometGenesisValidators) StakingValidators() (vals StakingValidators, s
 	return vals, supply
 }
 
-type StakingValidators []stakingtypes.Validator
+type StakingValidators []*StakingValidator
+
+type StakingValidator struct {
+	V  stakingtypes.Validator
+	PK *ValidatorPrivKey
+}
+
+func (sv StakingValidators) ToStakingType() []stakingtypes.Validator {
+	vs := make([]stakingtypes.Validator, len(sv))
+	for i, v := range sv {
+		vs[i] = v.V
+	}
+	return vs
+}
 
 func (sv StakingValidators) BondedPoolBalance() banktypes.Balance {
 	var coins sdk.Coins
 
 	for _, v := range sv {
-		coins = coins.Add(sdk.NewCoin(sdk.DefaultBondDenom, v.Tokens))
+		coins = coins.Add(sdk.NewCoin(sdk.DefaultBondDenom, v.V.Tokens))
 	}
 
 	return banktypes.Balance{
@@ -100,12 +141,12 @@ func (sv StakingValidators) BaseAccounts() BaseAccounts {
 		const accountNumber = 0
 		const sequenceNumber = 0
 
-		addrBytes, err := sdk.GetFromBech32(v.OperatorAddress, sdk.Bech32PrefixValAddr)
+		addrBytes, err := sdk.GetFromBech32(v.V.OperatorAddress, sdk.Bech32PrefixValAddr)
 		if err != nil {
 			panic(err)
 		}
 		ba[i] = authtypes.NewBaseAccount(
-			sdk.AccAddress(addrBytes), nil, accountNumber, sequenceNumber,
+			sdk.AccAddress(addrBytes), v.PK.Del.PubKey(), accountNumber, sequenceNumber,
 		)
 	}
 

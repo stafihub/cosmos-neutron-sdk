@@ -50,7 +50,7 @@ func TestTestnet(t *testing.T) {
 		StakingWithDefaultParams(stakingVals, delegations)
 
 	for i, v := range valPKs {
-		b.GenTx(v, cmtVals[i], sdk.NewCoin(sdk.DefaultBondDenom, sdk.DefaultPowerReduction))
+		b.GenTx(*v.Del, cmtVals[i].V, sdk.NewCoin(sdk.DefaultBondDenom, sdk.DefaultPowerReduction))
 	}
 
 	jGenesis := b.Encode()
@@ -93,7 +93,7 @@ func TestTestnet(t *testing.T) {
 			baseapp.SetChainID(chainID),
 		)
 
-		fpv := privval.NewFilePV(valPKs[i], cfg.Cfg.PrivValidatorKeyFile(), cfg.Cfg.PrivValidatorStateFile())
+		fpv := privval.NewFilePV(valPKs[i].Val, cfg.Cfg.PrivValidatorKeyFile(), cfg.Cfg.PrivValidatorStateFile())
 		fpv.Save()
 
 		n, err := node.NewNode(
