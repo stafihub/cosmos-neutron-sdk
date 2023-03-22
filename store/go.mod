@@ -14,7 +14,7 @@ require (
 	github.com/cosmos/iavl v0.21.0-beta.1
 	github.com/golang/mock v1.6.0
 	github.com/golang/protobuf v1.5.3 // indirect
-	github.com/hashicorp/go-hclog v1.4.0
+	github.com/hashicorp/go-hclog v1.5.0
 	github.com/hashicorp/go-plugin v1.4.9
 	github.com/hashicorp/golang-lru v0.5.5-0.20210104140557-80c98217689d
 	github.com/spf13/cast v1.5.0 // indirect
@@ -54,7 +54,7 @@ require (
 	github.com/kr/text v0.2.0 // indirect
 	github.com/linxGnu/grocksdb v1.7.15 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
-	github.com/mattn/go-isatty v0.0.17 // indirect
+	github.com/mattn/go-isatty v0.0.18 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
 	github.com/mitchellh/go-testing-interface v1.14.1 // indirect
 	github.com/oklog/run v1.1.0 // indirect
@@ -76,8 +76,3 @@ require (
 	golang.org/x/text v0.8.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-// Below are the long-lived replace for store.
-// Fix upstream GHSA-h395-qcrw-5vmq vulnerability.
-// TODO Remove it: https://github.com/cosmos/cosmos-sdk/issues/10409
-replace github.com/gin-gonic/gin => github.com/gin-gonic/gin v1.8.1
