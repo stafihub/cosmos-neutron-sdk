@@ -61,7 +61,7 @@ func (b *GenesisBuilder) GenTx(privVal secp256k1.PrivKey, val cmttypes.GenesisVa
 
 	// Produce the create validator message.
 	msg, err := stakingtypes.NewMsgCreateValidator(
-		val.Address.Bytes(),
+		privVal.PubKey().Address().Bytes(),
 		pubKey,
 		amount,
 		stakingtypes.Description{
@@ -103,7 +103,7 @@ func (b *GenesisBuilder) GenTx(privVal secp256k1.PrivKey, val cmttypes.GenesisVa
 		authsigning.SignerData{
 			ChainID: b.chainID,
 			PubKey:  privVal.PubKey(),
-			Address: sdk.MustBech32ifyAddressBytes("cosmos1", privVal.PubKey().Address()), // TODO: don't hardcode cosmos1!
+			Address: sdk.MustBech32ifyAddressBytes("cosmos", privVal.PubKey().Address()), // TODO: don't hardcode cosmos1!
 
 			// No account or sequence number for gentx.
 		},
@@ -307,6 +307,14 @@ func (b *GenesisBuilder) JSON() map[string]json.RawMessage {
 		authtx.NewTxConfig(b.codec, tx.DefaultSignModes).TxJSONEncoder(),
 		b.gentxs,
 	)
+
+	if err := genutiltypes.ValidateGenesis(
+		gentxGenesisState,
+		authtx.NewTxConfig(b.codec, tx.DefaultSignModes).TxJSONDecoder(),
+		genutiltypes.DefaultMessageValidator,
+	); err != nil {
+		panic(err)
+	}
 
 	b.appState = genutiltypes.SetGenesisStateInAppState(
 		b.codec, b.appState, gentxGenesisState,
