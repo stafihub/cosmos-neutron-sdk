@@ -97,6 +97,20 @@ func (b *GenesisBuilder) GenTx(privVal secp256k1.PrivKey, val cmttypes.GenesisVa
 
 	const signMode = signing.SignMode_SIGN_MODE_DIRECT
 
+	// Need to set the signature object on the tx builder first,
+	// otherwise we end up signing a different total message
+	// compared to what gets eventually verified.
+	if err := txb.SetSignatures(
+		signing.SignatureV2{
+			PubKey: privVal.PubKey(),
+			Data: &signing.SingleSignatureData{
+				SignMode: signMode,
+			},
+		},
+	); err != nil {
+		panic(err)
+	}
+
 	// Generate bytes to be signed.
 	bytesToSign, err := txConf.SignModeHandler().GetSignBytes(
 		signing.SignMode_SIGN_MODE_DIRECT,
