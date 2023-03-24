@@ -10,6 +10,7 @@ import (
 	cryptocodec "github.com/cosmos/cosmos-sdk/crypto/codec"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/cosmos/cosmos-sdk/types/bech32"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
@@ -141,12 +142,17 @@ func (sv StakingValidators) BaseAccounts() BaseAccounts {
 		const accountNumber = 0
 		const sequenceNumber = 0
 
-		addrBytes, err := sdk.GetFromBech32(v.V.OperatorAddress, sdk.Bech32PrefixValAddr)
+		pubKey := v.PK.Del.PubKey()
+		bech, err := bech32.ConvertAndEncode("cosmos", pubKey.Address().Bytes())
+		if err != nil {
+			panic(err)
+		}
+		accAddr, err := sdk.AccAddressFromBech32(bech)
 		if err != nil {
 			panic(err)
 		}
 		ba[i] = authtypes.NewBaseAccount(
-			sdk.AccAddress(addrBytes), v.PK.Del.PubKey(), accountNumber, sequenceNumber,
+			accAddr, pubKey, accountNumber, sequenceNumber,
 		)
 	}
 

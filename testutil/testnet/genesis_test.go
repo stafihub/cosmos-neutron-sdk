@@ -98,6 +98,15 @@ func TestGenesisBuilder_GentxAddresses(t *testing.T) {
 					} `json:"auth_info"`
 				} `json:"gen_txs"`
 			} `json:"genutil"`
+
+			Auth struct {
+				Accounts []struct {
+					Address string `json:"address"`
+					PubKey  struct {
+						Key string `json:"key"`
+					} `json:"pub_key"`
+				} `json:"accounts"`
+			} `json:"auth"`
 		} `json:"app_state"`
 	}
 	if err := json.Unmarshal(b.Encode(), &g); err != nil {
@@ -121,4 +130,9 @@ func TestGenesisBuilder_GentxAddresses(t *testing.T) {
 	_, parsedValAddr, err := bech32.DecodeAndConvert(gentxs[0].Body.Messages[0].DelegatorAddress)
 	require.NoError(t, err)
 	require.Equal(t, fmt.Sprintf("%X", parsedValAddr), delAddr0)
+
+	// The only base account in this genesis, matches the secp256k1 key.
+	acct := g.AppState.Auth.Accounts[0]
+	require.Equal(t, acct.Address, delAccAddr0)
+	require.Equal(t, acct.PubKey.Key, delPubKey0)
 }
