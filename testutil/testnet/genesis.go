@@ -17,6 +17,7 @@ import (
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	consensusparamtypes "github.com/cosmos/cosmos-sdk/x/consensus/types"
+	distributiontypes "github.com/cosmos/cosmos-sdk/x/distribution/types"
 	genutiltypes "github.com/cosmos/cosmos-sdk/x/genutil/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 )
@@ -313,6 +314,21 @@ func (b *GenesisBuilder) BaseAccounts(ba BaseAccounts, balances []banktypes.Bala
 		panic(err)
 	}
 	b.appState[banktypes.ModuleName] = jBankState
+	return b
+}
+
+func (b *GenesisBuilder) Distribution(g *distributiontypes.GenesisState) *GenesisBuilder {
+	j, err := b.codec.MarshalJSON(g)
+	if err != nil {
+		panic(err)
+	}
+
+	b.appState[distributiontypes.ModuleName] = j
+	return b
+}
+
+func (b *GenesisBuilder) DefaultDistribution() *GenesisBuilder {
+	return b.Distribution(distributiontypes.DefaultGenesisState())
 	return b
 }
 
