@@ -5,9 +5,9 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"cosmossdk.io/log"
-	sdkmath "cosmossdk.io/math"
 	cmtcfg "github.com/cometbft/cometbft/config"
 	"github.com/cometbft/cometbft/node"
 	"github.com/cometbft/cometbft/privval"
@@ -30,24 +30,15 @@ func TestTestnet(t *testing.T) {
 	valPKs := testnet.NewValidatorPrivKeys(nVals)
 	cmtVals := valPKs.CometGenesisValidators()
 	stakingVals, _ := cmtVals.StakingValidators()
-	valBaseAccounts := stakingVals.BaseAccounts()
-
-	delPKs := testnet.NewDelegatorPrivKeys(nVals)
-	delBaseAccounts := delPKs.BaseAccounts()
-	delegations := delBaseAccounts.Delegations(cmtVals)
-
-	balances, _ := delBaseAccounts.Balances(
-		sdk.NewCoins(sdk.NewCoin(sdk.DefaultBondDenom, sdkmath.NewInt(10_000_000_000_000_000))),
-	)
-
-	allBaseAccounts := append(valBaseAccounts, delBaseAccounts...)
 
 	b := testnet.NewGenesisBuilder().
 		ChainID(chainID).
 		DefaultAuthParams().
 		Consensus(nil, cmtVals).
-		BaseAccounts(allBaseAccounts, balances).
-		StakingWithDefaultParams(stakingVals, delegations)
+		BaseAccounts(stakingVals.BaseAccounts(), nil).
+		StakingWithDefaultParams(nil, nil).
+		BankingWithDefaultParams(stakingVals.Balances(), nil, nil, nil).
+		DefaultDistribution()
 
 	for i, v := range valPKs {
 		b.GenTx(*v.Del, cmtVals[i].V, sdk.NewCoin(sdk.DefaultBondDenom, sdk.DefaultPowerReduction))
@@ -111,5 +102,8 @@ func TestTestnet(t *testing.T) {
 		}
 
 		require.NoError(t, n.Start())
+		defer n.Stop()
 	}
+
+	time.Sleep(5 * time.Second)
 }

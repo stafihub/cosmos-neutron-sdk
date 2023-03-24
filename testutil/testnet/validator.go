@@ -158,3 +158,20 @@ func (sv StakingValidators) BaseAccounts() BaseAccounts {
 
 	return ba
 }
+
+func (sv StakingValidators) Balances() []banktypes.Balance {
+	bals := make([]banktypes.Balance, len(sv))
+
+	for i, v := range sv {
+		addr, err := bech32.ConvertAndEncode("cosmos", v.PK.Del.PubKey().Address().Bytes())
+		if err != nil {
+			panic(err)
+		}
+		bals[i] = banktypes.Balance{
+			Address: addr,
+			Coins:   sdk.Coins{sdk.NewCoin(sdk.DefaultBondDenom, v.V.Tokens)},
+		}
+	}
+
+	return bals
+}
