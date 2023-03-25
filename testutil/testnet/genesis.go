@@ -3,6 +3,8 @@ package testnet
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"time"
 
 	cmttypes "github.com/cometbft/cometbft/types"
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -45,7 +47,12 @@ func NewGenesisBuilder() *GenesisBuilder {
 		amino: codec.NewLegacyAmino(),
 		codec: pCodec,
 
-		outer:    map[string]json.RawMessage{},
+		outer: map[string]json.RawMessage{
+			"initial_height": json.RawMessage(`"1"`),
+			"genesis_time": json.RawMessage(
+				strconv.AppendQuote(nil, time.Now().UTC().Format(time.RFC3339Nano)),
+			),
+		},
 		appState: map[string]json.RawMessage{},
 	}
 }
