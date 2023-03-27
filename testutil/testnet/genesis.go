@@ -21,6 +21,7 @@ import (
 	consensusparamtypes "github.com/cosmos/cosmos-sdk/x/consensus/types"
 	distributiontypes "github.com/cosmos/cosmos-sdk/x/distribution/types"
 	genutiltypes "github.com/cosmos/cosmos-sdk/x/genutil/types"
+	minttypes "github.com/cosmos/cosmos-sdk/x/mint/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 )
 
@@ -278,6 +279,21 @@ func (b *GenesisBuilder) Banking(
 			denomMetadata,
 			sendEnabled,
 		),
+	)
+	if err != nil {
+		panic(err)
+	}
+	return b
+}
+
+func (b *GenesisBuilder) DefaultMint() *GenesisBuilder {
+	return b.Mint(minttypes.DefaultInitialMinter(), minttypes.DefaultParams())
+}
+
+func (b *GenesisBuilder) Mint(m minttypes.Minter, p minttypes.Params) *GenesisBuilder {
+	var err error
+	b.appState[minttypes.ModuleName], err = b.codec.MarshalJSON(
+		minttypes.NewGenesisState(m, p),
 	)
 	if err != nil {
 		panic(err)
