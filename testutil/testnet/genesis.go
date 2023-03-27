@@ -22,6 +22,7 @@ import (
 	distributiontypes "github.com/cosmos/cosmos-sdk/x/distribution/types"
 	genutiltypes "github.com/cosmos/cosmos-sdk/x/genutil/types"
 	minttypes "github.com/cosmos/cosmos-sdk/x/mint/types"
+	slashingtypes "github.com/cosmos/cosmos-sdk/x/slashing/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 )
 
@@ -301,6 +302,17 @@ func (b *GenesisBuilder) Mint(m minttypes.Minter, p minttypes.Params) *GenesisBu
 	return b
 }
 
+func (b *GenesisBuilder) SlashingWithDefaultParams(si []slashingtypes.SigningInfo, mb []slashingtypes.ValidatorMissedBlocks) *GenesisBuilder {
+	var err error
+	b.appState[slashingtypes.ModuleName], err = b.codec.MarshalJSON(
+		slashingtypes.NewGenesisState(slashingtypes.DefaultParams(), si, mb),
+	)
+	if err != nil {
+		panic(err)
+	}
+	return b
+}
+
 func (b *GenesisBuilder) BaseAccounts(ba BaseAccounts, balances []banktypes.Balance) *GenesisBuilder {
 	// Logic mostly copied from AddGenesisAccount.
 
@@ -352,7 +364,6 @@ func (b *GenesisBuilder) Distribution(g *distributiontypes.GenesisState) *Genesi
 
 func (b *GenesisBuilder) DefaultDistribution() *GenesisBuilder {
 	return b.Distribution(distributiontypes.DefaultGenesisState())
-	return b
 }
 
 func (b *GenesisBuilder) JSON() map[string]json.RawMessage {
