@@ -24,6 +24,7 @@ import (
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	cryptocodec "github.com/cosmos/cosmos-sdk/crypto/codec"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
+	"github.com/cosmos/cosmos-sdk/runtime"
 	servercmtlog "github.com/cosmos/cosmos-sdk/server/log"
 	"github.com/cosmos/cosmos-sdk/testutil/testnet"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -238,7 +239,8 @@ func TestComet_Multiple(t *testing.T) {
 		defer n.Stop()
 	}
 
-	time.Sleep(10 * time.Second)
+	// Not yet testing anything here. This test may end up going away anyhow.
+	time.Sleep(time.Second)
 }
 
 func newMinimalBaseApp(logger log.Logger, chainID string) *baseapp.BaseApp {
@@ -251,7 +253,7 @@ func newMinimalBaseApp(logger log.Logger, chainID string) *baseapp.BaseApp {
 	consKey := storetypes.NewKVStoreKey(consensusparamtypes.StoreKey)
 	consParamKeeper := consensusparamkeeper.NewKeeper(
 		pCodec,
-		consKey,
+		runtime.NewKVStoreService(consKey),
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
 
