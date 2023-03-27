@@ -26,17 +26,37 @@ import (
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 )
 
+// GenesisBuilder enables constructing a genesis file,
+// following a builder pattern.
+//
+// None of the methods on GenesisBuilder return an error,
+// choosing instead to panic.
+// GenesisBuilder is only intended for use in tests,
+// where inputs are predetermined and expected to succeed.
 type GenesisBuilder struct {
 	amino *codec.LegacyAmino
 	codec *codec.ProtoCodec
 
+	// The value used in ChainID.
+	// Some other require this value,
+	// so store it as a field instead of re-parsing it from JSON.
 	chainID string
 
-	outer, appState map[string]json.RawMessage
+	// The outer JSON object.
+	// Most data goes into app_state, but there are some top-level fields.
+	outer map[string]json.RawMessage
+
+	// Many of GenesisBuilder's methods operate on the app_state JSON object,
+	// so we track that separately and nest it inside outer upon a call to JSON().
+	appState map[string]json.RawMessage
 
 	gentxs []sdk.Tx
 }
 
+// NewGenesisBuilder returns an initialized GenesisBuilder.
+//
+// The returned GenesisBuilder has an initial height of 1
+// and a genesis_time of the current time when the function was called.
 func NewGenesisBuilder() *GenesisBuilder {
 	ir := codectypes.NewInterfaceRegistry()
 	cryptocodec.RegisterInterfaces(ir)
@@ -61,7 +81,7 @@ func NewGenesisBuilder() *GenesisBuilder {
 
 func (b *GenesisBuilder) GenTx(privVal secp256k1.PrivKey, val cmttypes.GenesisValidator, amount sdk.Coin) *GenesisBuilder {
 	if b.chainID == "" {
-		panic(fmt.Errorf("(*GenesisBuilder).GenTx called before (*GenesisBuilder).ChainID"))
+		panic(fmt.Errorf("(*GenesisBuilder).GenTx must not be called before (*GenesisBuilder).ChainID"))
 	}
 
 	pubKey, err := cryptocodec.FromCmtPubKeyInterface(val.PubKey)
@@ -161,6 +181,7 @@ func (b *GenesisBuilder) GenTx(privVal secp256k1.PrivKey, val cmttypes.GenesisVa
 	return b
 }
 
+// ChainID sets the genesis's "chain_id" field.
 func (b *GenesisBuilder) ChainID(id string) *GenesisBuilder {
 	b.chainID = id
 
@@ -173,22 +194,50 @@ func (b *GenesisBuilder) ChainID(id string) *GenesisBuilder {
 	return b
 }
 
+// GenesisTime sets the genesis's "genesis_time" field.
+// Note that [NewGenesisBuilder] sets the genesis time to the current time by default.
+func (b *GenesisBuilder) GenesisTime(t time.Time) *GenesisBuilder {
+	var err error
+	b.outer["genesis_time"], err = json.Marshal(t.Format(time.RFC3339Nano))
+	if err != nil {
+		panic(err)
+	}
+	return b
+}
+
+// InitialHeight sets the genesis's "initial_height" field to h.
+// Note that [NewGenesisBuilder] sets the initial height to 1 by default.
+func (b *GenesisBuilder) InitialHeight(h int64) *GenesisBuilder {
+	var err error
+	b.outer["initial_height"], err = json.Marshal(strconv.FormatInt(h, 10))
+	if err != nil {
+		panic(err)
+	}
+	return b
+}
+
+// AuthParams sets the auth params on the genesis.
 func (b *GenesisBuilder) AuthParams(params authtypes.Params) *GenesisBuilder {
-	j, err := json.Marshal(map[string]any{
+	var err error
+	b.appState[authtypes.ModuleName], err = json.Marshal(map[string]any{
 		"params": params,
 	})
 	if err != nil {
 		panic(err)
 	}
 
-	b.appState[authtypes.ModuleName] = j
 	return b
 }
 
+// DefaultAuthParams calls b.AuthParams with [authtypes.DefaultParams],
+// as a convenience so that callers do not have to import the authtypes package.
 func (b *GenesisBuilder) DefaultAuthParams() *GenesisBuilder {
 	return b.AuthParams(authtypes.DefaultParams())
 }
 
+// Consensus sets the consensus parameters and initial validators.
+//
+// If params is nil, [cmttypes.DefaultConsensusParams] is used.
 func (b *GenesisBuilder) Consensus(params *cmttypes.ConsensusParams, vals CometGenesisValidators) *GenesisBuilder {
 	if params == nil {
 		params = cmttypes.DefaultConsensusParams()
@@ -206,10 +255,9 @@ func (b *GenesisBuilder) Consensus(params *cmttypes.ConsensusParams, vals CometG
 	return b
 }
 
-func (b *GenesisBuilder) StakingWithDefaultParams(vals StakingValidators, delegations []stakingtypes.Delegation) *GenesisBuilder {
-	return b.Staking(stakingtypes.DefaultParams(), vals, delegations)
-}
-
+// Staking sets the staking parameters, validators, and delegations on the genesis.
+//
+// This also modifies the bank state's balances to include the bonded pool balance.
 func (b *GenesisBuilder) Staking(
 	params stakingtypes.Params,
 	vals StakingValidators,
@@ -240,30 +288,21 @@ func (b *GenesisBuilder) Staking(
 	bankGenesis := banktypes.GetGenesisStateFromAppState(b.codec, b.appState)
 	bankGenesis.Balances = append(bankGenesis.Balances, bondedPoolBalance)
 
-	jBankGenesis, err := b.codec.MarshalJSON(bankGenesis)
+	b.appState[banktypes.ModuleName], err = b.codec.MarshalJSON(bankGenesis)
 	if err != nil {
 		panic(err)
 	}
-	b.appState[banktypes.ModuleName] = jBankGenesis
 
 	return b
 }
 
-func (b *GenesisBuilder) BankingWithDefaultParams(
-	balances []banktypes.Balance,
-	totalSupply sdk.Coins,
-	denomMetadata []banktypes.Metadata,
-	sendEnabled []banktypes.SendEnabled,
-) *GenesisBuilder {
-	return b.Banking(
-		banktypes.DefaultParams(),
-		balances,
-		totalSupply,
-		denomMetadata,
-		sendEnabled,
-	)
+// StakingWithDefaultParams calls b.Staking, providing [stakingtypes.DefaultParams]
+// so that callers don't necessarily have to import [stakingtypes].
+func (b *GenesisBuilder) StakingWithDefaultParams(vals StakingValidators, delegations []stakingtypes.Delegation) *GenesisBuilder {
+	return b.Staking(stakingtypes.DefaultParams(), vals, delegations)
 }
 
+// Banking sets the banking genesis state.
 func (b *GenesisBuilder) Banking(
 	params banktypes.Params,
 	balances []banktypes.Balance,
@@ -287,10 +326,24 @@ func (b *GenesisBuilder) Banking(
 	return b
 }
 
-func (b *GenesisBuilder) DefaultMint() *GenesisBuilder {
-	return b.Mint(minttypes.DefaultInitialMinter(), minttypes.DefaultParams())
+// BankingWithDefaultParams calls b.Banking with [banktypes.DefaultParams],
+// so that callers don't necessarily have to import [banktypes].
+func (b *GenesisBuilder) BankingWithDefaultParams(
+	balances []banktypes.Balance,
+	totalSupply sdk.Coins,
+	denomMetadata []banktypes.Metadata,
+	sendEnabled []banktypes.SendEnabled,
+) *GenesisBuilder {
+	return b.Banking(
+		banktypes.DefaultParams(),
+		balances,
+		totalSupply,
+		denomMetadata,
+		sendEnabled,
+	)
 }
 
+// Mint sets the mint genesis state.
 func (b *GenesisBuilder) Mint(m minttypes.Minter, p minttypes.Params) *GenesisBuilder {
 	var err error
 	b.appState[minttypes.ModuleName], err = b.codec.MarshalJSON(
@@ -302,15 +355,34 @@ func (b *GenesisBuilder) Mint(m minttypes.Minter, p minttypes.Params) *GenesisBu
 	return b
 }
 
-func (b *GenesisBuilder) SlashingWithDefaultParams(si []slashingtypes.SigningInfo, mb []slashingtypes.ValidatorMissedBlocks) *GenesisBuilder {
+// DefaultMint calls b.Mint with [minttypes.DefaultInitialMinter] and [minttypes.DefaultParams].
+func (b *GenesisBuilder) DefaultMint() *GenesisBuilder {
+	return b.Mint(minttypes.DefaultInitialMinter(), minttypes.DefaultParams())
+}
+
+// Slashing sets the slashing genesis state.
+func (b *GenesisBuilder) Slashing(
+	params slashingtypes.Params,
+	si []slashingtypes.SigningInfo,
+	mb []slashingtypes.ValidatorMissedBlocks,
+) *GenesisBuilder {
 	var err error
 	b.appState[slashingtypes.ModuleName], err = b.codec.MarshalJSON(
-		slashingtypes.NewGenesisState(slashingtypes.DefaultParams(), si, mb),
+		slashingtypes.NewGenesisState(params, si, mb),
 	)
 	if err != nil {
 		panic(err)
 	}
 	return b
+}
+
+// SlashingWithDefaultParams calls b.Slashing with [slashingtypes.DefaultParams],
+// so that callers don't necessarily have to import [slashingtypes].
+func (b *GenesisBuilder) SlashingWithDefaultParams(
+	si []slashingtypes.SigningInfo,
+	mb []slashingtypes.ValidatorMissedBlocks,
+) *GenesisBuilder {
+	return b.Slashing(slashingtypes.DefaultParams(), si, mb)
 }
 
 func (b *GenesisBuilder) BaseAccounts(ba BaseAccounts, balances []banktypes.Balance) *GenesisBuilder {
@@ -366,6 +438,7 @@ func (b *GenesisBuilder) DefaultDistribution() *GenesisBuilder {
 	return b.Distribution(distributiontypes.DefaultGenesisState())
 }
 
+// JSON returns the map of the genesis after applying some final transformations.
 func (b *GenesisBuilder) JSON() map[string]json.RawMessage {
 	gentxGenesisState := genutiltypes.NewGenesisStateFromTx(
 		authtx.NewTxConfig(b.codec, tx.DefaultSignModes).TxJSONEncoder(),
@@ -394,6 +467,7 @@ func (b *GenesisBuilder) JSON() map[string]json.RawMessage {
 	return b.outer
 }
 
+// Encode returns the JSON-encoded, finalized genesis.
 func (b *GenesisBuilder) Encode() []byte {
 	j, err := b.amino.MarshalJSON(b.JSON())
 	if err != nil {

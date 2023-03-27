@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
+	"time"
 
 	cmted25519 "github.com/cometbft/cometbft/crypto/ed25519"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
@@ -14,6 +15,88 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestGenesisBuilder_GenesisTime(t *testing.T) {
+	t.Run("defaults to current time", func(t *testing.T) {
+		before := time.Now()
+		time.Sleep(time.Millisecond) // So that the genesis time will be strictly after "before".
+		gb := testnet.NewGenesisBuilder()
+		time.Sleep(time.Millisecond) // So that the genesis time will be strictly before "after".
+		after := time.Now()
+
+		var gts string
+		require.NoError(t, json.Unmarshal(gb.JSON()["genesis_time"], &gts))
+
+		gt, err := time.Parse(time.RFC3339Nano, gts)
+		require.NoError(t, err)
+
+		require.True(t, gt.After(before))
+		require.True(t, after.After(gt))
+	})
+
+	t.Run("can be set to arbitrary time", func(t *testing.T) {
+		want := time.Date(2023, 3, 27, 9, 50, 23, 0, time.UTC)
+
+		gb := testnet.NewGenesisBuilder().GenesisTime(want)
+
+		var gts string
+		require.NoError(t, json.Unmarshal(gb.JSON()["genesis_time"], &gts))
+
+		gt, err := time.Parse(time.RFC3339Nano, gts)
+		require.NoError(t, err)
+
+		require.True(t, gt.Equal(want))
+	})
+}
+
+func TestGenesisBuilder_InitialHeight(t *testing.T) {
+	t.Run("defaults to 1", func(t *testing.T) {
+		var ih string
+		require.NoError(
+			t,
+			json.Unmarshal(
+				testnet.NewGenesisBuilder().JSON()["initial_height"],
+				&ih,
+			),
+		)
+
+		require.Equal(t, ih, "1")
+	})
+
+	t.Run("can be set to arbitrary value", func(t *testing.T) {
+		var ih string
+		require.NoError(
+			t,
+			json.Unmarshal(
+				testnet.NewGenesisBuilder().InitialHeight(12345).JSON()["initial_height"],
+				&ih,
+			),
+		)
+
+		require.Equal(t, ih, "12345")
+	})
+}
+
+func TestGenesisBuilder_ChainID(t *testing.T) {
+	// No default.
+	gb := testnet.NewGenesisBuilder()
+	m := gb.JSON()
+	_, ok := m["chain_id"]
+	require.False(t, ok)
+
+	m = gb.ChainID("my-chain").JSON()
+	var id string
+	require.NoError(
+		t,
+		json.Unmarshal(
+			gb.ChainID("my-chain").JSON()["chain_id"],
+			&id,
+		),
+	)
+	require.Equal(t, id, "my-chain")
+}
+
+// Use known keys and addresses to assert that correct validator and delegator keys
+// occur in the expected locations (i.e. we didn't mistakenly swap the keys anywhere).
 func TestGenesisBuilder_GentxAddresses(t *testing.T) {
 	const chainID = "simapp-chain"
 
