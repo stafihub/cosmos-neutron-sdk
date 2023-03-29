@@ -90,7 +90,11 @@ func TestCometStarter_PortContention(t *testing.T) {
 
 	const nRuns = 4
 
-	logger := log.NewTestLogger(t)
+	// Use an info-level logger, because the debug logs in comet are noisy
+	// and there is a data race in comet debug logs,
+	// due to be fixed in v0.37.1 which is not yet released:
+	// https://github.com/cometbft/cometbft/pull/532
+	logger := log.NewTestLoggerInfo(t)
 
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 
