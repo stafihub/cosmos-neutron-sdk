@@ -135,7 +135,7 @@ func TestGenesisBuilder_GentxAddresses(t *testing.T) {
 		},
 	}
 	cmtVals := valPKs.CometGenesisValidators()
-	stakingVals, _ := cmtVals.StakingValidators()
+	stakingVals := cmtVals.StakingValidators()
 	valBaseAccounts := stakingVals.BaseAccounts()
 
 	b := testnet.NewGenesisBuilder().

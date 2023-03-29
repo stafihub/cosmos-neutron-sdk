@@ -74,8 +74,8 @@ func (cgv CometGenesisValidators) ToComet() []cmttypes.GenesisValidator {
 	return vs
 }
 
-func (cgv CometGenesisValidators) StakingValidators() (vals StakingValidators, supply sdk.Coins) {
-	vals = make(StakingValidators, len(cgv))
+func (cgv CometGenesisValidators) StakingValidators() StakingValidators {
+	vals := make(StakingValidators, len(cgv))
 	for i, v := range cgv {
 		pk, err := cryptocodec.FromCmtPubKeyInterface(v.V.PubKey)
 		if err != nil {
@@ -100,11 +100,9 @@ func (cgv CometGenesisValidators) StakingValidators() (vals StakingValidators, s
 			},
 			PK: v.PK,
 		}
-
-		supply = supply.Add(sdk.NewCoin(sdk.DefaultBondDenom, sdk.DefaultPowerReduction))
 	}
 
-	return vals, supply
+	return vals
 }
 
 type StakingValidators []*StakingValidator
@@ -143,7 +141,7 @@ func (sv StakingValidators) BaseAccounts() BaseAccounts {
 		const sequenceNumber = 0
 
 		pubKey := v.PK.Del.PubKey()
-		bech, err := bech32.ConvertAndEncode("cosmos", pubKey.Address().Bytes())
+		bech, err := bech32.ConvertAndEncode("cosmos", pubKey.Address().Bytes()) // TODO: this shouldn't be hardcoded to cosmos!
 		if err != nil {
 			panic(err)
 		}

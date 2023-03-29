@@ -67,7 +67,7 @@ func TestCometStarter_PortContention(t *testing.T) {
 
 	valPKs := testnet.NewValidatorPrivKeys(nVals)
 	cmtVals := valPKs.CometGenesisValidators()
-	stakingVals, _ := cmtVals.StakingValidators()
+	stakingVals := cmtVals.StakingValidators()
 
 	const chainID = "simapp-cometstarter"
 
