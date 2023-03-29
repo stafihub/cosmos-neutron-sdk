@@ -47,7 +47,6 @@ func TestTestnet(t *testing.T) {
 	}
 
 	jGenesis := b.Encode()
-	t.Logf("jGenesis: %s", jGenesis)
 
 	logger := log.NewTestLogger(t)
 
@@ -68,6 +67,8 @@ func TestTestnet(t *testing.T) {
 		cmtCfg.P2P.PersistentPeers = strings.Join(p2pAddrs, ",")
 		cmtCfg.P2P.AllowDuplicateIP = true // All peers will be on 127.0.0.1.
 		cmtCfg.P2P.AddrBookStrict = false
+
+		cmtCfg.BaseConfig.DBBackend = "memdb"
 
 		cfg, err := testnet.NewDiskConfig(dir, cmtCfg)
 		require.NoError(t, err)
@@ -131,6 +132,7 @@ func TestTestnet(t *testing.T) {
 
 		// Saw height advance.
 		heightAdvanced = true
+		break
 	}
 
 	if !heightAdvanced {
