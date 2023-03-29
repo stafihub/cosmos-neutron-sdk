@@ -71,24 +71,13 @@ func TestCometStarter_PortContention(t *testing.T) {
 
 	const chainID = "simapp-cometstarter"
 
-	b := testnet.NewGenesisBuilder().
-		ChainID(chainID).
-		DefaultAuthParams().
-		Consensus(nil, cmtVals).
-		BaseAccounts(stakingVals.BaseAccounts(), nil).
-		StakingWithDefaultParams(nil, nil).
-		BankingWithDefaultParams(stakingVals.Balances(), nil, nil, nil).
-		DefaultDistribution().
-		DefaultMint().
-		SlashingWithDefaultParams(nil, nil)
-
-	for i, v := range valPKs {
-		b.GenTx(*v.Del, cmtVals[i].V, sdk.NewCoin(sdk.DefaultBondDenom, sdk.DefaultPowerReduction))
-	}
+	b := testnet.DefaultGenesisBuilderOnlyValidators(
+		chainID,
+		stakingVals,
+		sdk.NewCoin(sdk.DefaultBondDenom, sdk.DefaultPowerReduction),
+	)
 
 	jGenesis := b.Encode()
-
-	const nRuns = 4
 
 	// Use an info-level logger, because the debug logs in comet are noisy
 	// and there is a data race in comet debug logs,
@@ -98,6 +87,7 @@ func TestCometStarter_PortContention(t *testing.T) {
 
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 
+	const nRuns = 4
 	for i := 0; i < nRuns; i++ {
 		t.Run(fmt.Sprintf("attempt %d", i), func(t *testing.T) {
 			nodes := make([]*node.Node, nVals)
@@ -146,10 +136,10 @@ func TestCometStarter_PortContention(t *testing.T) {
 			}
 
 			heightAdvanced := false
-			for j := 0; j < 60; j++ {
+			for j := 0; j < 40; j++ {
 				cs := nodes[0].ConsensusState()
 				if cs.GetLastHeight() < 2 {
-					time.Sleep(500 * time.Millisecond)
+					time.Sleep(250 * time.Millisecond)
 					continue
 				}
 

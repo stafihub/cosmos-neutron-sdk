@@ -98,6 +98,7 @@ func (cgv CometGenesisValidators) StakingValidators() StakingValidators {
 
 				// more fields uncopied from testutil/sims/app_helpers.go:220
 			},
+			C:  v,
 			PK: v.PK,
 		}
 	}
@@ -109,6 +110,7 @@ type StakingValidators []*StakingValidator
 
 type StakingValidator struct {
 	V  stakingtypes.Validator
+	C  *CometGenesisValidator
 	PK *ValidatorPrivKey
 }
 

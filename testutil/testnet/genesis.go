@@ -476,3 +476,38 @@ func (b *GenesisBuilder) Encode() []byte {
 
 	return j
 }
+
+// DefaultGenesisBuilderOnlyValidators returns a GenesisBuilder configured only with the given StakingValidators,
+// with default parameters everywhere else.
+// validatorAmount is the amount to give each validator during gentx.
+//
+// This is a convenience for the common case of nothing special in the genesis.
+// For anything outside of the defaults,
+// the longhand form of NewGenesisBuilder().ChainID(chainID)... should be used.
+func DefaultGenesisBuilderOnlyValidators(
+	chainID string,
+	sv StakingValidators,
+	validatorAmount sdk.Coin,
+) *GenesisBuilder {
+	cmtVals := make(CometGenesisValidators, len(sv))
+	for i := range sv {
+		cmtVals[i] = sv[i].C
+	}
+
+	b := NewGenesisBuilder().
+		ChainID(chainID).
+		DefaultAuthParams().
+		Consensus(nil, cmtVals).
+		BaseAccounts(sv.BaseAccounts(), nil).
+		StakingWithDefaultParams(nil, nil).
+		BankingWithDefaultParams(sv.Balances(), nil, nil, nil).
+		DefaultDistribution().
+		DefaultMint().
+		SlashingWithDefaultParams(nil, nil)
+
+	for _, v := range sv {
+		b.GenTx(*v.PK.Del, v.C.V, sdk.NewCoin(sdk.DefaultBondDenom, sdk.DefaultPowerReduction))
+	}
+
+	return b
+}
