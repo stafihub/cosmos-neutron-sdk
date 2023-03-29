@@ -102,12 +102,14 @@ func TestCometStarter_PortContention(t *testing.T) {
 		t.Run(fmt.Sprintf("attempt %d", i), func(t *testing.T) {
 			nodes := make([]*node.Node, nVals)
 			for j := 0; j < nVals; j++ {
+				rootDir := t.TempDir()
+
 				app := simapp.NewSimApp(
 					logger.With("instance", j),
 					dbm.NewMemDB(),
 					nil,
 					true,
-					simtestutil.AppOptionsMap{},
+					simtestutil.NewAppOptionsWithFlagHome(rootDir),
 					baseapp.SetChainID(chainID),
 				)
 
@@ -124,7 +126,7 @@ func TestCometStarter_PortContention(t *testing.T) {
 					cfg,
 					valPKs[j].Val,
 					jGenesis,
-					t.TempDir(),
+					rootDir,
 				).
 					Logger(logger.With("rootmodule", fmt.Sprintf("comet_node-%d", j))).
 					TCPAddrChooser(func() string {
