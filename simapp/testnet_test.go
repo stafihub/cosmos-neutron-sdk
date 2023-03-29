@@ -38,7 +38,9 @@ func TestTestnet(t *testing.T) {
 		BaseAccounts(stakingVals.BaseAccounts(), nil).
 		StakingWithDefaultParams(nil, nil).
 		BankingWithDefaultParams(stakingVals.Balances(), nil, nil, nil).
-		DefaultDistribution()
+		DefaultDistribution().
+		DefaultMint().
+		SlashingWithDefaultParams(nil, nil)
 
 	for i, v := range valPKs {
 		b.GenTx(*v.Del, cmtVals[i].V, sdk.NewCoin(sdk.DefaultBondDenom, sdk.DefaultPowerReduction))
@@ -49,13 +51,20 @@ func TestTestnet(t *testing.T) {
 
 	logger := log.NewTestLogger(t)
 
+	nodes := make([]*node.Node, nVals)
 	p2pAddrs := make([]string, 0, nVals)
 	for i := 0; i < nVals; i++ {
 		dir := t.TempDir()
 
+		// Obviously hardcoding the ports here is not good.
+		// This test is passing currently, and it's a helpful reference
+		// for the dynamic port assignment used in the CometStarter type.
+		// Once that type is all put together, this test will be deleted.
+		p2pPort := 30000 + i
+
 		cmtCfg := cmtcfg.DefaultConfig()
-		cmtCfg.RPC.ListenAddress = "tcp://127.0.0.1:0" // Listen on random port for RPC.
-		cmtCfg.P2P.ListenAddress = "tcp://127.0.0.1:0" // Listen on random port for P2P too.
+		cmtCfg.RPC.ListenAddress = ""                                         // Do not run RPC service.
+		cmtCfg.P2P.ListenAddress = fmt.Sprintf("tcp://127.0.0.1:%d", p2pPort) // Listen on random port for P2P too.
 		cmtCfg.P2P.PersistentPeers = strings.Join(p2pAddrs, ",")
 		cmtCfg.P2P.AllowDuplicateIP = true // All peers will be on 127.0.0.1.
 		cmtCfg.P2P.AddrBookStrict = false
@@ -103,7 +112,28 @@ func TestTestnet(t *testing.T) {
 
 		require.NoError(t, n.Start())
 		defer n.Stop()
+
+		nodes[i] = n
+
+		p2pAddr := fmt.Sprintf("%s@127.0.0.1:%d", n.Switch().NetAddress().ID, p2pPort)
+		p2pAddrs = append(p2pAddrs, p2pAddr)
 	}
 
-	time.Sleep(5 * time.Second)
+	heightAdvanced := false
+	for i := 0; i < 20; i++ {
+		h := nodes[0].ConsensusState().GetLastHeight()
+		if h < 2 {
+			time.Sleep(500 * time.Millisecond)
+			continue
+		}
+
+		t.Logf("Saw height advance to %d", h)
+
+		// Saw height advance.
+		heightAdvanced = true
+	}
+
+	if !heightAdvanced {
+		t.Fatalf("consensus height did not advance in approximately 10 seconds")
+	}
 }
