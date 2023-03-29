@@ -16,13 +16,21 @@ import (
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 )
 
+// ValidatorPrivKeys is a slice of [*ValidatorPrivKey].
 type ValidatorPrivKeys []*ValidatorPrivKey
 
+// ValidatorPrivKey holds a validator key (a comet ed25519 key)
+// and the validator's delegator or account key (a Cosmos SDK secp256k1 key).
 type ValidatorPrivKey struct {
 	Val cmted25519.PrivKey
 	Del *secp256k1.PrivKey
 }
 
+// NewValidatorPrivKeys returns a ValidatorPrivKeys of length n,
+// where each set of keys is dynamically generated.
+//
+// If writing a test where deterministic keys are required,
+// the caller should manually construct a slice and assign each key as needed.
 func NewValidatorPrivKeys(n int) ValidatorPrivKeys {
 	vpk := make(ValidatorPrivKeys, n)
 
@@ -36,6 +44,7 @@ func NewValidatorPrivKeys(n int) ValidatorPrivKeys {
 	return vpk
 }
 
+// CometGenesisValidators derives the CometGenesisValidators belonging to vpk.
 func (vpk ValidatorPrivKeys) CometGenesisValidators() CometGenesisValidators {
 	cgv := make(CometGenesisValidators, len(vpk))
 
@@ -59,13 +68,18 @@ func (vpk ValidatorPrivKeys) CometGenesisValidators() CometGenesisValidators {
 	return cgv
 }
 
+// CometGenesisValidators is a slice of [*CometGenesisValidator].
 type CometGenesisValidators []*CometGenesisValidator
 
+// CometGenesisValidator holds a comet GenesisValidator
+// and a reference to the ValidatorPrivKey from which the CometGenesisValidator was derived.
 type CometGenesisValidator struct {
 	V  cmttypes.GenesisValidator
 	PK *ValidatorPrivKey
 }
 
+// ToComet returns a new slice of [cmttypes.GenesisValidator],
+// useful for some interactions.
 func (cgv CometGenesisValidators) ToComet() []cmttypes.GenesisValidator {
 	vs := make([]cmttypes.GenesisValidator, len(cgv))
 	for i, v := range cgv {
@@ -74,6 +88,7 @@ func (cgv CometGenesisValidators) ToComet() []cmttypes.GenesisValidator {
 	return vs
 }
 
+// StakingValidators derives the StakingValidators belonging to cgv.
 func (cgv CometGenesisValidators) StakingValidators() StakingValidators {
 	vals := make(StakingValidators, len(cgv))
 	for i, v := range cgv {
@@ -106,14 +121,19 @@ func (cgv CometGenesisValidators) StakingValidators() StakingValidators {
 	return vals
 }
 
+// StakingValidators is a slice of [*StakingValidator].
 type StakingValidators []*StakingValidator
 
+// StakingValidator holds a [stakingtypes.Validator],
+// and the CometGenesisValidator and ValidatorPrivKey required to derive the StakingValidator.
 type StakingValidator struct {
 	V  stakingtypes.Validator
 	C  *CometGenesisValidator
 	PK *ValidatorPrivKey
 }
 
+// ToStakingType returns a new slice of [stakingtypes.Validator],
+// useful for some interactions.
 func (sv StakingValidators) ToStakingType() []stakingtypes.Validator {
 	vs := make([]stakingtypes.Validator, len(sv))
 	for i, v := range sv {
@@ -122,19 +142,7 @@ func (sv StakingValidators) ToStakingType() []stakingtypes.Validator {
 	return vs
 }
 
-func (sv StakingValidators) BondedPoolBalance() banktypes.Balance {
-	var coins sdk.Coins
-
-	for _, v := range sv {
-		coins = coins.Add(sdk.NewCoin(sdk.DefaultBondDenom, v.V.Tokens))
-	}
-
-	return banktypes.Balance{
-		Address: authtypes.NewModuleAddress(stakingtypes.BondedPoolName).String(),
-		Coins:   coins,
-	}
-}
-
+// BaseAccounts returns the BaseAccounts for this set of StakingValidators.
 func (sv StakingValidators) BaseAccounts() BaseAccounts {
 	ba := make(BaseAccounts, len(sv))
 
@@ -159,11 +167,12 @@ func (sv StakingValidators) BaseAccounts() BaseAccounts {
 	return ba
 }
 
+// Balances returns the balances held by this set of StakingValidators.
 func (sv StakingValidators) Balances() []banktypes.Balance {
 	bals := make([]banktypes.Balance, len(sv))
 
 	for i, v := range sv {
-		addr, err := bech32.ConvertAndEncode("cosmos", v.PK.Del.PubKey().Address().Bytes())
+		addr, err := bech32.ConvertAndEncode("cosmos", v.PK.Del.PubKey().Address().Bytes()) // TODO: this shouldn't be hardcoded to cosmos!
 		if err != nil {
 			panic(err)
 		}
