@@ -1,4 +1,4 @@
-package testnettest
+package testnet_test
 
 import (
 	"fmt"
