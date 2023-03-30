@@ -10,7 +10,6 @@ import (
 	"cosmossdk.io/log"
 	"cosmossdk.io/simapp"
 	cmtcfg "github.com/cometbft/cometbft/config"
-	"github.com/cometbft/cometbft/node"
 	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
@@ -85,17 +84,23 @@ func TestCometStarter_PortContention(t *testing.T) {
 	// https://github.com/cometbft/cometbft/pull/532
 	logger := log.NewTestLoggerInfo(t)
 
+	// This chooser function is the key of this test,
+	// where there is only one more available address than there are nodes.
+	// Therefore it is likely that an address will already be in use,
+	// thereby exercising the address-in-use retry.
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	chooser := func() string {
+		return reuseAddrs[rng.Intn(len(reuseAddrs))]
+	}
 
 	const nRuns = 4
 	for i := 0; i < nRuns; i++ {
 		t.Run(fmt.Sprintf("attempt %d", i), func(t *testing.T) {
-			nodes := make([]*node.Node, nVals)
-			for j := 0; j < nVals; j++ {
+			nodes, err := testnet.NewNetwork(nVals, func(idx int) *testnet.CometStarter {
 				rootDir := t.TempDir()
 
 				app := simapp.NewSimApp(
-					logger.With("instance", j),
+					logger.With("instance", idx),
 					dbm.NewMemDB(),
 					nil,
 					true,
@@ -111,29 +116,18 @@ func TestCometStarter_PortContention(t *testing.T) {
 				// so memdb suffices.
 				cfg.BaseConfig.DBBackend = "memdb"
 
-				cs := testnet.NewCometStarter(
+				return testnet.NewCometStarter(
 					app,
 					cfg,
-					valPKs[j].Val,
+					valPKs[idx].Val,
 					jGenesis,
 					rootDir,
 				).
-					Logger(logger.With("rootmodule", fmt.Sprintf("comet_node-%d", j))).
-					TCPAddrChooser(func() string {
-						return reuseAddrs[rng.Intn(len(reuseAddrs))]
-					})
-
-				n, err := cs.Start()
-				require.NoError(t, err)
-				defer n.Stop()
-
-				nodes[j] = n
-				curNetAddress := n.PEXReactor().Switch.NetAddress()
-				for k := 0; k < j; k++ {
-					_ = nodes[k].PEXReactor().Switch.DialPeerWithAddress(curNetAddress)
-					_ = n.PEXReactor().Switch.DialPeerWithAddress(nodes[k].PEXReactor().Switch.NetAddress())
-				}
-			}
+					Logger(logger.With("rootmodule", fmt.Sprintf("comet_node-%d", idx))).
+					TCPAddrChooser(chooser)
+			})
+			require.NoError(t, err)
+			defer nodes.Stop()
 
 			heightAdvanced := false
 			for j := 0; j < 40; j++ {
@@ -154,10 +148,8 @@ func TestCometStarter_PortContention(t *testing.T) {
 
 			// Ensure nodes are stopped completely,
 			// so that we don't get t.Cleanup errors around directories not being empty.
-			for _, n := range nodes {
-				_ = n.Stop()
-				n.Wait()
-			}
+			_ = nodes.Stop()
+			nodes.Wait()
 		})
 	}
 }
