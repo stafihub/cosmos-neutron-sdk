@@ -110,10 +110,7 @@ func TestCometStarter_PortContention(t *testing.T) {
 
 				cfg := cmtcfg.DefaultConfig()
 
-				// With the default goleveldb backend,
-				// we see spurious "resource temporarily unavailable" errors in this test, for some reason.
-				// We aren't exercising anything with the comet database in this test,
-				// so memdb suffices.
+				// memdb is sufficient for this test.
 				cfg.BaseConfig.DBBackend = "memdb"
 
 				return testnet.NewCometStarter(
