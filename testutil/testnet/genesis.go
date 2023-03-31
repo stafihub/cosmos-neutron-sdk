@@ -79,6 +79,9 @@ func NewGenesisBuilder() *GenesisBuilder {
 	}
 }
 
+// GenTx emulates the gentx CLI, creating a message to create a validator
+// represented by val, with "amount" self delegation,
+// and signed by privVal.
 func (b *GenesisBuilder) GenTx(privVal secp256k1.PrivKey, val cmttypes.GenesisValidator, amount sdk.Coin) *GenesisBuilder {
 	if b.chainID == "" {
 		panic(fmt.Errorf("(*GenesisBuilder).GenTx must not be called before (*GenesisBuilder).ChainID"))
@@ -302,6 +305,11 @@ func (b *GenesisBuilder) StakingWithDefaultParams(vals StakingValidators, delega
 	return b.Staking(stakingtypes.DefaultParams(), vals, delegations)
 }
 
+// DefaultStaking is shorthand for b.StakingWithDefaultParams with nil validators and delegations.
+func (b *GenesisBuilder) DefaultStaking() *GenesisBuilder {
+	return b.StakingWithDefaultParams(nil, nil)
+}
+
 // Banking sets the banking genesis state.
 func (b *GenesisBuilder) Banking(
 	params banktypes.Params,
@@ -383,6 +391,12 @@ func (b *GenesisBuilder) SlashingWithDefaultParams(
 	mb []slashingtypes.ValidatorMissedBlocks,
 ) *GenesisBuilder {
 	return b.Slashing(slashingtypes.DefaultParams(), si, mb)
+}
+
+// DefaultSlashing is shorthand for b.SlashingWithDefaultParams
+// with nil signing info and validator missed blocks.
+func (b *GenesisBuilder) DefaultSlashing() *GenesisBuilder {
+	return b.SlashingWithDefaultParams(nil, nil)
 }
 
 func (b *GenesisBuilder) BaseAccounts(ba BaseAccounts, balances []banktypes.Balance) *GenesisBuilder {

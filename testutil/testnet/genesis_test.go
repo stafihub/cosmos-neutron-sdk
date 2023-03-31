@@ -219,3 +219,38 @@ func TestGenesisBuilder_GentxAddresses(t *testing.T) {
 	require.Equal(t, acct.Address, delAccAddr0)
 	require.Equal(t, acct.PubKey.Key, delPubKey0)
 }
+
+func ExampleGenesisBuilder() {
+	const nVals = 4
+
+	// Generate random private keys for validators.
+	valPKs := testnet.NewValidatorPrivKeys(nVals)
+
+	// Produce the comet representation of those validators.
+	cmtVals := valPKs.CometGenesisValidators()
+
+	stakingVals := cmtVals.StakingValidators()
+
+	// Configure a new genesis builder
+	// with a fairly thorough set of defaults.
+	//
+	// If you only ever need defaults, you can use DefaultGenesisBuilderOnlyValidators().
+	b := testnet.NewGenesisBuilder().
+		ChainID("my-chain-id").
+		DefaultAuthParams().
+		Consensus(nil, cmtVals).
+		BaseAccounts(stakingVals.BaseAccounts(), nil).
+		DefaultStaking().
+		BankingWithDefaultParams(stakingVals.Balances(), nil, nil, nil).
+		DefaultDistribution().
+		DefaultMint().
+		DefaultSlashing()
+
+	for i := range stakingVals {
+		b.GenTx(*valPKs[i].Del, cmtVals[i].V, sdk.NewCoin(sdk.DefaultBondDenom, sdk.DefaultPowerReduction))
+	}
+
+	// Now, you can access b.JSON() if you need to make further modifications
+	// not (yet) supported by the GenesisBuilder API,
+	// or you can use b.Encode() for the serialzed JSON of the genesis.
+}
