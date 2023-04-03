@@ -16,6 +16,11 @@ import (
 //
 // Every node is attempted to be started,
 // and any errors collected are joined together and returned.
+//
+// In the event of errors, a non-nil Nodes slice may still be returned
+// and some elements may be nil.
+// Callers should call [Nodes.Stop] and [Nodes.Wait] to perform cleanup,
+// regardless of the returned error.
 func NewNetwork(nVals int, createCometStarter func(int) *CometStarter) (Nodes, error) {
 	// The ordered slice of nodes; correct indexing is important.
 	// The creator goroutines will write directly into this slice.
