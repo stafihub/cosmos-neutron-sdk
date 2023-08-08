@@ -213,6 +213,12 @@ func (k Keeper) IterateMissedBlockBitmap(ctx sdk.Context, addr sdk.ConsAddress, 
 	}
 }
 
+// IterateValidatorMissedBlockBitArray is just a wrapper around IterateMissedBlockBitmap to keep compatibility with
+// third-party project which uses Cosmos SDK (i.e. Interchain Security)
+func (k Keeper) IterateValidatorMissedBlockBitArray(ctx sdk.Context, addr sdk.ConsAddress, cb func(index int64, missed bool) (stop bool)) {
+	k.IterateMissedBlockBitmap(ctx, addr, cb)
+}
+
 // GetValidatorMissedBlocks returns array of missed blocks for given validator.
 func (k Keeper) GetValidatorMissedBlocks(ctx sdk.Context, addr sdk.ConsAddress) []types.MissedBlock {
 	missedBlocks := make([]types.MissedBlock, 0, k.SignedBlocksWindow(ctx))
