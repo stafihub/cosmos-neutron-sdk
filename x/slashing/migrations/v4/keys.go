@@ -9,8 +9,6 @@ import (
 )
 
 const (
-	addrLen = 20
-
 	MissedBlockBitmapChunkSize = 1024 // 2^10 bits
 )
 
