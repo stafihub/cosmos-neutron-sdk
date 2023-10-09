@@ -9,8 +9,6 @@ import (
 )
 
 const (
-	addrLen = 20
-
 	MissedBlockBitmapChunkSize = 1024 // 2^10 bits
 )
 
@@ -32,7 +30,7 @@ func ValidatorSigningInfoAddress(key []byte) (v sdk.ConsAddress) {
 }
 
 func validatorMissedBlockBitArrayPrefixKey(v sdk.ConsAddress) []byte {
-	return append(validatorMissedBlockBitArrayKeyPrefix, v.Bytes()...)
+	return append(validatorMissedBlockBitArrayKeyPrefix, address.MustLengthPrefix(v.Bytes())...)
 }
 
 func ValidatorMissedBlockBitArrayKey(v sdk.ConsAddress, i int64) []byte {
