@@ -22,6 +22,7 @@ import (
 // skipUpgradeHeightArray is a set of block heights for which the upgrade must be skipped
 func BeginBlocker(k *keeper.Keeper, ctx sdk.Context, _ abci.RequestBeginBlock) {
 	defer telemetry.ModuleMeasureSince(types.ModuleName, time.Now(), telemetry.MetricKeyBeginBlocker)
+	ctx = ctx.WithBlockGasMeter(sdk.NewInfiniteGasMeter()).WithGasMeter(sdk.NewInfiniteGasMeter())
 
 	plan, found := k.GetUpgradePlan(ctx)
 
@@ -80,7 +81,6 @@ func BeginBlocker(k *keeper.Keeper, ctx sdk.Context, _ abci.RequestBeginBlock) {
 
 		// We have an upgrade handler for this upgrade name, so apply the upgrade
 		ctx.Logger().Info(fmt.Sprintf("applying upgrade \"%s\" at %s", plan.Name, plan.DueAt()))
-		ctx = ctx.WithBlockGasMeter(sdk.NewInfiniteGasMeter())
 		k.ApplyUpgrade(ctx, plan)
 		return
 	}
