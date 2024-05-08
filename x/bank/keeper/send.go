@@ -276,7 +276,7 @@ func (k BaseSendKeeper) sendCoins(ctx context.Context, fromAddr, toAddr sdk.AccA
 		),
 		sdk.NewEvent(
 			sdk.EventTypeMessage,
-			sdk.NewAttribute(types.AttributeKeySender, fromAddr.String()),
+			sdk.NewAttribute(types.AttributeKeySender, fromAddrString),
 		),
 	})
 
