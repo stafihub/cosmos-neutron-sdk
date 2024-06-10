@@ -216,13 +216,13 @@ func (k BaseSendKeeper) InputOutputCoins(ctx context.Context, input types.Input,
 }
 
 // SendCoinsWithoutBlockHook calls sendCoins without calling the `BlockBeforeSend` hook.
-func (k BaseSendKeeper) SendCoinsWithoutBlockHook(ctx context.Context, fromAddr sdk.AccAddress, toAddr sdk.AccAddress, amt sdk.Coins) error {
+func (k BaseSendKeeper) SendCoinsWithoutBlockHook(ctx context.Context, fromAddr, toAddr sdk.AccAddress, amt sdk.Coins) error {
 	return k.sendCoins(ctx, fromAddr, toAddr, amt)
 }
 
 // SendCoins transfers amt coins from a sending account to a receiving account.
 // An error is returned upon failure.
-func (k BaseSendKeeper) SendCoins(ctx context.Context, fromAddr sdk.AccAddress, toAddr sdk.AccAddress, amt sdk.Coins) error {
+func (k BaseSendKeeper) SendCoins(ctx context.Context, fromAddr, toAddr sdk.AccAddress, amt sdk.Coins) error {
 	// BlockBeforeSend hook should always be called before the TrackBeforeSend hook.
 	err := k.BlockBeforeSend(ctx, fromAddr, toAddr, amt)
 	if err != nil {
