@@ -8,9 +8,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/types/kv"
 )
 
-const (
-	MissedBlockBitmapChunkSize = 1024 // 2^10 bits
-)
+const MissedBlockBitmapChunkSize = 1024 // 2^10 bits
 
 var (
 	ValidatorSigningInfoKeyPrefix         = []byte{0x01}

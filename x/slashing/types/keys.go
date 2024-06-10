@@ -79,6 +79,7 @@ func ValidatorMissedBlockBitmapPrefixKey(v sdk.ConsAddress) []byte {
 func ValidatorMissedBlockBitmapKey(v sdk.ConsAddress, chunkIndex int64) []byte {
 	bz := make([]byte, 8)
 	binary.LittleEndian.PutUint64(bz, uint64(chunkIndex))
+
 	return append(ValidatorMissedBlockBitmapPrefixKey(v), bz...)
 }
 

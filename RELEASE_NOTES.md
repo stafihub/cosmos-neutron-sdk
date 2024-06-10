@@ -1,20 +1,21 @@
-# Cosmos SDK v0.47.10 Release Notes
+# Cosmos SDK v0.50.7 Release Notes
 
-💬 [**Release Discussion**](https://github.com/orgs/cosmos/discussions/6)
+💬 [**Release Discussion**](https://github.com/orgs/cosmos/discussions/58)
 
 ## 🚀 Highlights
 
-This early monthly patch release fixes [GHSA-86h5-xcpx-cfqc](https://github.com/cosmos/cosmos-sdk/security/advisories/GHSA-86h5-xcpx-cfqc).
+For this month patch release of the v0.50.x line, a few improvements were added to the SDK and some bugs were fixed.
 
-We recommended to upgrade to this patch release as soon as possible.
-When upgrading from <= v0.47.9, please ensure that 2/3 of the validator power upgrade to v0.47.10.
+Notably, we added and fixed the following:
 
-Curious? Check out the [changelog](https://github.com/cosmos/cosmos-sdk/blob/v0.47.10/CHANGELOG.md) for an exhaustive list of changes or [compare changes](https://github.com/cosmos/cosmos-sdk/compare/v0.47.9...v0.47.10) from last release.
+* Add extra checks in x/consensus `MsgUpdateParams` to prevent footguns when updating the consensus parameters.
+    * Forgetting a field in a x/consensus parameter change gov proposal could lead to a chain halt.
+    * The fix is in theory consensus breaking, but in practice, it is only a footgun prevention (the path only triggers if the proposal was executed and was invalid). Please ensure that all validators are on v0.50.7 before the execution of a `x/consensus` params update proposal.
+* Remove txs from the mempool when they fail in RecheckTX
 
-Refer to the [upgrading guide](https://github.com/cosmos/cosmos-sdk/blob/release/v0.50.x/UPGRADING.md) when migrating from `v0.47.x` to `v0.50.x`.
+## 📝 Changelog
 
-## Maintenance Policy
+Check out the [changelog](https://github.com/cosmos/cosmos-sdk/blob/v0.50.7/CHANGELOG.md) for an exhaustive list of changes, or [compare changes](https://github.com/cosmos/cosmos-sdk/compare/release/v0.50.6...v0.50.7) from the last release.
 
-v0.50 has been released which means the v0.47.x line is now supported for bug fixes only, as per our release policy. Earlier versions are not maintained.  
-
-Start integrating with [Cosmos SDK Eden (v0.50)](https://github.com/cosmos/cosmos-sdk/releases/tag/v0.50.5) and enjoy and the new features and performance improvements.
+Refer to the [upgrading guide](https://github.com/cosmos/cosmos-sdk/blob/release/v0.50.x/UPGRADING.md) when migrating from `v0.47.x` to `v0.50.1`.
+Note, that the next SDK release, v0.51, will not include `x/params` migration, when migrating from < v0.47, v0.50.x **or** v0.47.x, is a mandatory migration.

@@ -4,9 +4,10 @@ import (
 	"testing"
 
 	"github.com/bits-and-blooms/bitset"
-	storetypes "github.com/cosmos/cosmos-sdk/store/types"
 	gogotypes "github.com/cosmos/gogoproto/types"
 	"github.com/stretchr/testify/require"
+
+	storetypes "cosmossdk.io/store/types"
 
 	"github.com/cosmos/cosmos-sdk/testutil"
 	sdk "github.com/cosmos/cosmos-sdk/types"

@@ -1,13 +1,18 @@
 package bank_test
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
-	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
-	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
+	abci "github.com/cometbft/cometbft/abci/types"
+	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"cosmossdk.io/depinject"
+	"cosmossdk.io/log"
+	sdkmath "cosmossdk.io/math"
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
@@ -24,10 +29,13 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/bank/testutil"
 	"github.com/cosmos/cosmos-sdk/x/bank/types"
 	_ "github.com/cosmos/cosmos-sdk/x/consensus"
+	_ "github.com/cosmos/cosmos-sdk/x/distribution"
+	distrkeeper "github.com/cosmos/cosmos-sdk/x/distribution/keeper"
 	_ "github.com/cosmos/cosmos-sdk/x/gov"
 	govv1 "github.com/cosmos/cosmos-sdk/x/gov/types/v1"
 	_ "github.com/cosmos/cosmos-sdk/x/params"
 	_ "github.com/cosmos/cosmos-sdk/x/staking"
+	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 )
 
 type (
@@ -91,9 +99,10 @@ var (
 )
 
 type suite struct {
-	BankKeeper    bankkeeper.Keeper
-	AccountKeeper types.AccountKeeper
-	App           *runtime.App
+	BankKeeper         bankkeeper.Keeper
+	AccountKeeper      types.AccountKeeper
+	DistributionKeeper distrkeeper.Keeper
+	App                *runtime.App
 }
 
 func createTestSuite(t *testing.T, genesisAccounts []authtypes.GenesisAccount) suite {
@@ -107,16 +116,21 @@ func createTestSuite(t *testing.T, genesisAccounts []authtypes.GenesisAccount) s
 	startupCfg := simtestutil.DefaultStartUpConfig()
 	startupCfg.GenesisAccounts = genAccounts
 
-	app, err := simtestutil.SetupWithConfiguration(configurator.NewAppConfig(
-		configurator.ParamsModule(),
-		configurator.AuthModule(),
-		configurator.StakingModule(),
-		configurator.TxModule(),
-		configurator.ConsensusModule(),
-		configurator.BankModule(),
-		configurator.GovModule(),
-	),
-		startupCfg, &res.BankKeeper, &res.AccountKeeper)
+	app, err := simtestutil.SetupWithConfiguration(
+		depinject.Configs(
+			configurator.NewAppConfig(
+				configurator.ParamsModule(),
+				configurator.AuthModule(),
+				configurator.StakingModule(),
+				configurator.TxModule(),
+				configurator.ConsensusModule(),
+				configurator.BankModule(),
+				configurator.GovModule(),
+				configurator.DistributionModule(),
+			),
+			depinject.Supply(log.NewNopLogger()),
+		),
+		startupCfg, &res.BankKeeper, &res.AccountKeeper, &res.DistributionKeeper)
 
 	res.App = app
 
@@ -126,8 +140,9 @@ func createTestSuite(t *testing.T, genesisAccounts []authtypes.GenesisAccount) s
 
 // CheckBalance checks the balance of an account.
 func checkBalance(t *testing.T, baseApp *baseapp.BaseApp, addr sdk.AccAddress, balances sdk.Coins, keeper bankkeeper.Keeper) {
-	ctxCheck := baseApp.NewContext(true, tmproto.Header{})
-	require.True(t, balances.IsEqual(keeper.GetAllBalances(ctxCheck, addr)))
+	ctxCheck := baseApp.NewContext(true)
+	keeperBalances := keeper.GetAllBalances(ctxCheck, addr)
+	require.True(t, balances.Equal(keeperBalances))
 }
 
 func TestSendNotEnoughBalance(t *testing.T) {
@@ -138,11 +153,13 @@ func TestSendNotEnoughBalance(t *testing.T) {
 	genAccs := []authtypes.GenesisAccount{acc}
 	s := createTestSuite(t, genAccs)
 	baseApp := s.App.BaseApp
-	ctx := baseApp.NewContext(false, tmproto.Header{})
+	ctx := baseApp.NewContext(false)
 
-	require.NoError(t, testutil.FundAccount(s.BankKeeper, ctx, addr1, sdk.NewCoins(sdk.NewInt64Coin("foocoin", 67))))
-
-	baseApp.Commit()
+	require.NoError(t, testutil.FundAccount(ctx, s.BankKeeper, addr1, sdk.NewCoins(sdk.NewInt64Coin("foocoin", 67))))
+	_, err := baseApp.FinalizeBlock(&abci.RequestFinalizeBlock{Height: baseApp.LastBlockHeight() + 1})
+	require.NoError(t, err)
+	_, err = baseApp.Commit()
+	require.NoError(t, err)
 
 	res1 := s.AccountKeeper.GetAccount(ctx, addr1)
 	require.NotNil(t, res1)
@@ -152,14 +169,14 @@ func TestSendNotEnoughBalance(t *testing.T) {
 	origSeq := res1.GetSequence()
 
 	sendMsg := types.NewMsgSend(addr1, addr2, sdk.Coins{sdk.NewInt64Coin("foocoin", 100)})
-	header := tmproto.Header{Height: baseApp.LastBlockHeight() + 1}
-	txConfig := moduletestutil.MakeTestEncodingConfig().TxConfig
-	_, _, err := simtestutil.SignCheckDeliver(t, txConfig, baseApp, header, []sdk.Msg{sendMsg}, "", []uint64{origAccNum}, []uint64{origSeq}, false, false, priv1)
+	header := cmtproto.Header{Height: baseApp.LastBlockHeight() + 1}
+	txConfig := moduletestutil.MakeTestTxConfig()
+	_, _, err = simtestutil.SignCheckDeliver(t, txConfig, baseApp, header, []sdk.Msg{sendMsg}, "", []uint64{origAccNum}, []uint64{origSeq}, false, false, priv1)
 	require.Error(t, err)
 
 	checkBalance(t, baseApp, addr1, sdk.Coins{sdk.NewInt64Coin("foocoin", 67)}, s.BankKeeper)
 
-	ctx2 := baseApp.NewContext(true, tmproto.Header{})
+	ctx2 := baseApp.NewContext(true)
 	res2 := s.AccountKeeper.GetAccount(ctx2, addr1)
 	require.NotNil(t, res2)
 
@@ -175,11 +192,13 @@ func TestMsgMultiSendWithAccounts(t *testing.T) {
 	genAccs := []authtypes.GenesisAccount{acc}
 	s := createTestSuite(t, genAccs)
 	baseApp := s.App.BaseApp
-	ctx := baseApp.NewContext(false, tmproto.Header{})
+	ctx := baseApp.NewContext(false)
 
-	require.NoError(t, testutil.FundAccount(s.BankKeeper, ctx, addr1, sdk.NewCoins(sdk.NewInt64Coin("foocoin", 67))))
-
-	baseApp.Commit()
+	require.NoError(t, testutil.FundAccount(ctx, s.BankKeeper, addr1, sdk.NewCoins(sdk.NewInt64Coin("foocoin", 67))))
+	_, err := baseApp.FinalizeBlock(&abci.RequestFinalizeBlock{Height: baseApp.LastBlockHeight() + 1})
+	require.NoError(t, err)
+	_, err = baseApp.Commit()
+	require.NoError(t, err)
 
 	res1 := s.AccountKeeper.GetAccount(ctx, addr1)
 	require.NotNil(t, res1)
@@ -229,8 +248,9 @@ func TestMsgMultiSendWithAccounts(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		header := tmproto.Header{Height: baseApp.LastBlockHeight() + 1}
-		txConfig := moduletestutil.MakeTestEncodingConfig().TxConfig
+		t.Logf("testing %s", tc.desc)
+		header := cmtproto.Header{Height: baseApp.LastBlockHeight() + 1}
+		txConfig := moduletestutil.MakeTestTxConfig()
 		_, _, err := simtestutil.SignCheckDeliver(t, txConfig, baseApp, header, tc.msgs, "", tc.accNums, tc.accSeqs, tc.expSimPass, tc.expPass, tc.privKeys...)
 		if tc.expPass {
 			require.NoError(t, err)
@@ -255,13 +275,14 @@ func TestMsgMultiSendMultipleOut(t *testing.T) {
 	genAccs := []authtypes.GenesisAccount{acc1, acc2}
 	s := createTestSuite(t, genAccs)
 	baseApp := s.App.BaseApp
-	ctx := baseApp.NewContext(false, tmproto.Header{})
+	ctx := baseApp.NewContext(false)
 
-	require.NoError(t, testutil.FundAccount(s.BankKeeper, ctx, addr1, sdk.NewCoins(sdk.NewInt64Coin("foocoin", 42))))
-
-	require.NoError(t, testutil.FundAccount(s.BankKeeper, ctx, addr2, sdk.NewCoins(sdk.NewInt64Coin("foocoin", 42))))
-
-	baseApp.Commit()
+	require.NoError(t, testutil.FundAccount(ctx, s.BankKeeper, addr1, sdk.NewCoins(sdk.NewInt64Coin("foocoin", 42))))
+	require.NoError(t, testutil.FundAccount(ctx, s.BankKeeper, addr2, sdk.NewCoins(sdk.NewInt64Coin("foocoin", 42))))
+	_, err := baseApp.FinalizeBlock(&abci.RequestFinalizeBlock{Height: baseApp.LastBlockHeight() + 1})
+	require.NoError(t, err)
+	_, err = baseApp.Commit()
+	require.NoError(t, err)
 
 	testCases := []appTestCase{
 		{
@@ -280,8 +301,8 @@ func TestMsgMultiSendMultipleOut(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		header := tmproto.Header{Height: baseApp.LastBlockHeight() + 1}
-		txConfig := moduletestutil.MakeTestEncodingConfig().TxConfig
+		header := cmtproto.Header{Height: baseApp.LastBlockHeight() + 1}
+		txConfig := moduletestutil.MakeTestTxConfig()
 		_, _, err := simtestutil.SignCheckDeliver(t, txConfig, baseApp, header, tc.msgs, "", tc.accNums, tc.accSeqs, tc.expSimPass, tc.expPass, tc.privKeys...)
 		require.NoError(t, err)
 
@@ -300,11 +321,13 @@ func TestMsgMultiSendDependent(t *testing.T) {
 	genAccs := []authtypes.GenesisAccount{acc1, acc2}
 	s := createTestSuite(t, genAccs)
 	baseApp := s.App.BaseApp
-	ctx := baseApp.NewContext(false, tmproto.Header{})
+	ctx := baseApp.NewContext(false)
 
-	require.NoError(t, testutil.FundAccount(s.BankKeeper, ctx, addr1, sdk.NewCoins(sdk.NewInt64Coin("foocoin", 42))))
-
-	baseApp.Commit()
+	require.NoError(t, testutil.FundAccount(ctx, s.BankKeeper, addr1, sdk.NewCoins(sdk.NewInt64Coin("foocoin", 42))))
+	_, err = baseApp.FinalizeBlock(&abci.RequestFinalizeBlock{Height: baseApp.LastBlockHeight() + 1})
+	require.NoError(t, err)
+	_, err = baseApp.Commit()
+	require.NoError(t, err)
 
 	testCases := []appTestCase{
 		{
@@ -333,8 +356,8 @@ func TestMsgMultiSendDependent(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		header := tmproto.Header{Height: baseApp.LastBlockHeight() + 1}
-		txConfig := moduletestutil.MakeTestEncodingConfig().TxConfig
+		header := cmtproto.Header{Height: baseApp.LastBlockHeight() + 1}
+		txConfig := moduletestutil.MakeTestTxConfig()
 		_, _, err := simtestutil.SignCheckDeliver(t, txConfig, baseApp, header, tc.msgs, "", tc.accNums, tc.accSeqs, tc.expSimPass, tc.expPass, tc.privKeys...)
 		require.NoError(t, err)
 
@@ -350,32 +373,23 @@ func TestMsgSetSendEnabled(t *testing.T) {
 	genAccs := []authtypes.GenesisAccount{acc1}
 	s := createTestSuite(t, genAccs)
 
-	ctx := s.App.BaseApp.NewContext(false, tmproto.Header{})
-	require.NoError(t, testutil.FundAccount(s.BankKeeper, ctx, addr1, sdk.NewCoins(sdk.NewInt64Coin("foocoin", 101))))
+	ctx := s.App.BaseApp.NewContext(false)
+	require.NoError(t, testutil.FundAccount(ctx, s.BankKeeper, addr1, sdk.NewCoins(sdk.NewInt64Coin("foocoin", 101))))
+	require.NoError(t, testutil.FundAccount(ctx, s.BankKeeper, addr1, sdk.NewCoins(sdk.NewInt64Coin("stake", 100000))))
 	addr1Str := addr1.String()
 	govAddr := s.BankKeeper.GetAuthority()
 	goodGovProp, err := govv1.NewMsgSubmitProposal(
 		[]sdk.Msg{
 			types.NewMsgSetSendEnabled(govAddr, nil, nil),
 		},
-		sdk.Coins{{"foocoin", sdk.NewInt(5)}},
+		sdk.Coins{{Denom: "stake", Amount: sdkmath.NewInt(100000)}},
 		addr1Str,
 		"set default send enabled to true",
 		"Change send enabled",
 		"Modify send enabled and set to true",
+		false,
 	)
 	require.NoError(t, err, "making goodGovProp")
-	badGovProp, err := govv1.NewMsgSubmitProposal(
-		[]sdk.Msg{
-			types.NewMsgSetSendEnabled(govAddr, []*types.SendEnabled{{"bad coin name!", true}}, nil),
-		},
-		sdk.Coins{{"foocoin", sdk.NewInt(5)}},
-		addr1Str,
-		"set default send enabled to true",
-		"Change send enabled",
-		"Modify send enabled and set to true",
-	)
-	require.NoError(t, err, "making badGovProp")
 
 	testCases := []appTestCase{
 		{
@@ -418,25 +432,12 @@ func TestMsgSetSendEnabled(t *testing.T) {
 			accSeqs:    []uint64{1},
 			expInError: nil,
 		},
-		{
-			desc:       "submitted bad as gov prop",
-			expSimPass: false,
-			expPass:    false,
-			msgs: []sdk.Msg{
-				badGovProp,
-			},
-			accSeqs: []uint64{2},
-			expInError: []string{
-				"invalid denom: bad coin name!",
-				"invalid proposal message",
-			},
-		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.desc, func(tt *testing.T) {
-			header := tmproto.Header{Height: s.App.LastBlockHeight() + 1}
-			txGen := moduletestutil.MakeTestEncodingConfig().TxConfig
+			header := cmtproto.Header{Height: s.App.LastBlockHeight() + 1}
+			txGen := moduletestutil.MakeTestTxConfig()
 			_, _, err = simtestutil.SignCheckDeliver(tt, txGen, s.App.BaseApp, header, tc.msgs, "", []uint64{0}, tc.accSeqs, tc.expSimPass, tc.expPass, priv1)
 			if len(tc.expInError) > 0 {
 				require.Error(tt, err)
@@ -456,9 +457,9 @@ var _ types.BankHooks = &MockBankHooksReceiver{}
 type MockBankHooksReceiver struct{}
 
 // Mock BlockBeforeSend bank hook that doesn't allow the sending of exactly 100 coins of any denom.
-func (h *MockBankHooksReceiver) BlockBeforeSend(ctx sdk.Context, from, to sdk.AccAddress, amount sdk.Coins) error {
+func (h *MockBankHooksReceiver) BlockBeforeSend(ctx context.Context, from, to sdk.AccAddress, amount sdk.Coins) error {
 	for _, coin := range amount {
-		if coin.Amount.Equal(sdk.NewInt(100)) {
+		if coin.Amount.Equal(sdkmath.NewInt(100)) {
 			return fmt.Errorf("not allowed; expected %v, got: %v", 100, coin.Amount)
 		}
 	}
@@ -472,10 +473,10 @@ var (
 )
 
 // Mock TrackBeforeSend bank hook that simply tracks the sending of exactly 50 coins of any denom.
-func (h *MockBankHooksReceiver) TrackBeforeSend(ctx sdk.Context, from, to sdk.AccAddress, amount sdk.Coins) {
+func (h *MockBankHooksReceiver) TrackBeforeSend(ctx context.Context, from, to sdk.AccAddress, amount sdk.Coins) {
 	for _, coin := range amount {
-		if coin.Amount.Equal(sdk.NewInt(50)) {
-			countTrackBeforeSend += 1
+		if coin.Amount.Equal(sdkmath.NewInt(50)) {
+			countTrackBeforeSend++
 		}
 	}
 }
@@ -486,15 +487,15 @@ func TestHooks(t *testing.T) {
 	genAccs := []authtypes.GenesisAccount{acc1}
 	s := createTestSuite(t, genAccs)
 
-	ctx := s.App.BaseApp.NewContext(false, tmproto.Header{})
+	ctx := s.App.BaseApp.NewContext(false)
 
-	require.NoError(t, testutil.FundAccount(s.BankKeeper, ctx, addr1, sdk.NewCoins(sdk.NewCoin("stake", sdk.NewInt(1000)))))
-	require.NoError(t, testutil.FundModuleAccount(s.BankKeeper, ctx, stakingtypes.BondedPoolName, sdk.NewCoins(sdk.NewCoin("stake", sdk.NewInt(1000)))))
+	require.NoError(t, testutil.FundAccount(ctx, s.BankKeeper, addr1, sdk.NewCoins(sdk.NewCoin("stake", sdkmath.NewInt(1000)))))
+	require.NoError(t, testutil.FundModuleAccount(ctx, s.BankKeeper, stakingtypes.BondedPoolName, sdk.NewCoins(sdk.NewCoin("stake", sdkmath.NewInt(1000)))))
 
 	// create a valid send amount which is 1 coin, and an invalidSendAmount which is 100 coins
-	validSendAmount := sdk.NewCoins(sdk.NewCoin("stake", sdk.NewInt(1)))
-	triggerTrackSendAmount := sdk.NewCoins(sdk.NewCoin("stake", sdk.NewInt(50)))
-	invalidBlockSendAmount := sdk.NewCoins(sdk.NewCoin("stake", sdk.NewInt(100)))
+	validSendAmount := sdk.NewCoins(sdk.NewCoin("stake", sdkmath.NewInt(1)))
+	triggerTrackSendAmount := sdk.NewCoins(sdk.NewCoin("stake", sdkmath.NewInt(50)))
+	invalidBlockSendAmount := sdk.NewCoins(sdk.NewCoin("stake", sdkmath.NewInt(100)))
 
 	// setup our mock bank hooks receiver that prevents the send of 100 coins
 	bankHooksReceiver := MockBankHooksReceiver{}
@@ -526,6 +527,7 @@ func TestHooks(t *testing.T) {
 	err = s.BankKeeper.SendCoinsFromAccountToModule(ctx, addr1, stakingtypes.BondedPoolName, invalidBlockSendAmount)
 	require.Error(t, err)
 	err = s.BankKeeper.SendCoinsFromAccountToModule(ctx, addr1, stakingtypes.BondedPoolName, triggerTrackSendAmount)
+	require.NoError(t, err)
 	require.Equal(t, countTrackBeforeSend, expNextCount)
 	expNextCount++
 
@@ -535,6 +537,7 @@ func TestHooks(t *testing.T) {
 	err = s.BankKeeper.SendCoinsFromModuleToAccount(ctx, stakingtypes.BondedPoolName, addr1, invalidBlockSendAmount)
 	require.Error(t, err)
 	err = s.BankKeeper.SendCoinsFromModuleToAccount(ctx, stakingtypes.BondedPoolName, addr1, triggerTrackSendAmount)
+	require.NoError(t, err)
 	require.Equal(t, countTrackBeforeSend, expNextCount)
 	expNextCount++
 
@@ -545,6 +548,7 @@ func TestHooks(t *testing.T) {
 	// there should be no error since module to module does not call block before send hooks
 	require.NoError(t, err)
 	err = s.BankKeeper.SendCoinsFromModuleToModule(ctx, stakingtypes.BondedPoolName, stakingtypes.NotBondedPoolName, triggerTrackSendAmount)
+	require.NoError(t, err)
 	require.Equal(t, countTrackBeforeSend, expNextCount)
 	expNextCount++
 
@@ -554,6 +558,7 @@ func TestHooks(t *testing.T) {
 	err = s.BankKeeper.DelegateCoins(ctx, addr1, s.AccountKeeper.GetModuleAddress(stakingtypes.BondedPoolName), invalidBlockSendAmount)
 	require.Error(t, err)
 	err = s.BankKeeper.DelegateCoins(ctx, addr1, s.AccountKeeper.GetModuleAddress(stakingtypes.BondedPoolName), triggerTrackSendAmount)
+	require.NoError(t, err)
 	require.Equal(t, countTrackBeforeSend, expNextCount)
 	expNextCount++
 
@@ -564,6 +569,7 @@ func TestHooks(t *testing.T) {
 	require.Error(t, err)
 
 	err = s.BankKeeper.UndelegateCoins(ctx, s.AccountKeeper.GetModuleAddress(stakingtypes.BondedPoolName), addr1, triggerTrackSendAmount)
+	require.NoError(t, err)
 	require.Equal(t, countTrackBeforeSend, expNextCount)
 	expNextCount++
 }

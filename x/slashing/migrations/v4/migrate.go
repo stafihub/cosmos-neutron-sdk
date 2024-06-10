@@ -1,10 +1,11 @@
 package v4
 
 import (
-	"cosmossdk.io/errors"
 	"github.com/bits-and-blooms/bitset"
-	storetypes "github.com/cosmos/cosmos-sdk/store/types"
 	gogotypes "github.com/cosmos/gogoproto/types"
+
+	"cosmossdk.io/errors"
+	storetypes "cosmossdk.io/store/types"
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
