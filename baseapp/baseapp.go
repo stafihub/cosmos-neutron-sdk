@@ -707,7 +707,7 @@ func (app *BaseApp) cacheTxContext(ctx sdk.Context, txBytes []byte) (sdk.Context
 func (app *BaseApp) preBlock(req *abci.RequestFinalizeBlock) ([]abci.Event, error) {
 	var events []abci.Event
 	if app.preBlocker != nil {
-		ctx := app.finalizeBlockState.Context().WithEventManager(sdk.NewEventManager())
+		ctx := app.finalizeBlockState.Context()
 		rsp, err := app.preBlocker(ctx, req)
 		if err != nil {
 			return nil, err

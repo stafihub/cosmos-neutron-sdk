@@ -25,6 +25,7 @@ func getMessageAminoName(msg protoreflect.Message) (string, bool) {
 
 // getMessageAminoName returns the amino name of a message if it has been set by the `amino.name` option.
 // If the message does not have an amino name, then it returns the msg url.
+// If it cannot get the msg url, then it returns false.
 func getMessageAminoNameAny(msg protoreflect.Message) string {
 	messageOptions := msg.Descriptor().Options()
 	if proto.HasExtension(messageOptions, amino.E_Name) {
@@ -32,11 +33,6 @@ func getMessageAminoNameAny(msg protoreflect.Message) string {
 		return name.(string)
 	}
 
-	return getMessageTypeURL(msg)
-}
-
-// getMessageTypeURL returns the msg url.
-func getMessageTypeURL(msg protoreflect.Message) string {
 	msgURL := "/" + string(msg.Descriptor().FullName())
 	if msgURL != "/" {
 		return msgURL

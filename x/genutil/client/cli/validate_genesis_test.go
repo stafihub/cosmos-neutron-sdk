@@ -1,19 +1,14 @@
 package cli_test
 
 import (
-	"encoding/json"
-	"fmt"
-	"io"
 	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/cosmos-sdk/client"
-	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/testutil"
 	clitestutil "github.com/cosmos/cosmos-sdk/testutil/cli"
-	"github.com/cosmos/cosmos-sdk/types/module"
 	"github.com/cosmos/cosmos-sdk/x/genutil/client/cli"
 )
 
@@ -38,33 +33,14 @@ var v037Exported = `{
 
 func TestValidateGenesis(t *testing.T) {
 	testCases := []struct {
-		name         string
-		genesis      string
-		expErrStr    string
-		basicManager module.BasicManager
+		name    string
+		genesis string
+		expErr  bool
 	}{
-		{
-			"invalid json",
-			`{"app_state": {x,}}`,
-			"error at offset 16: invalid character",
-			module.NewBasicManager(),
-		},
-		{
-			"invalid: missing module config in app_state",
-			func() string {
-				bz, err := os.ReadFile("../../types/testdata/app_genesis.json")
-				require.NoError(t, err)
-
-				return string(bz)
-			}(),
-			"section is missing in the app_state",
-			module.NewBasicManager(mockModule{}),
-		},
 		{
 			"exported 0.37 genesis file",
 			v037Exported,
-			"make sure that you have correctly migrated all CometBFT consensus params",
-			module.NewBasicManager(),
+			true,
 		},
 		{
 			"valid 0.50 genesis file",
@@ -74,8 +50,7 @@ func TestValidateGenesis(t *testing.T) {
 
 				return string(bz)
 			}(),
-			"",
-			module.NewBasicManager(),
+			false,
 		},
 	}
 
@@ -84,30 +59,12 @@ func TestValidateGenesis(t *testing.T) {
 
 		t.Run(tc.name, func(t *testing.T) {
 			genesisFile := testutil.WriteToNewTempFile(t, tc.genesis)
-			_, err := clitestutil.ExecTestCLICmd(client.Context{}, cli.ValidateGenesisCmd(tc.basicManager), []string{genesisFile.Name()})
-			if tc.expErrStr != "" {
-				require.Contains(t, err.Error(), tc.expErrStr)
+			_, err := clitestutil.ExecTestCLICmd(client.Context{}, cli.ValidateGenesisCmd(nil), []string{genesisFile.Name()})
+			if tc.expErr {
+				require.Contains(t, err.Error(), "make sure that you have correctly migrated all CometBFT consensus params")
 			} else {
 				require.NoError(t, err)
 			}
 		})
 	}
-}
-
-var _ module.HasGenesisBasics = mockModule{}
-
-type mockModule struct {
-	module.AppModuleBasic
-}
-
-func (m mockModule) Name() string {
-	return "mock"
-}
-
-func (m mockModule) DefaultGenesis(codec.JSONCodec) json.RawMessage {
-	return json.RawMessage(`{"foo": "bar"}`)
-}
-
-func (m mockModule) ValidateGenesis(codec.JSONCodec, client.TxEncodingConfig, json.RawMessage) error {
-	return fmt.Errorf("mock section is missing: %w", io.EOF)
 }
