@@ -1988,11 +1988,9 @@ func TestABCI_HaltChain(t *testing.T) {
 		expHalt     bool
 	}{
 		{"default", 0, 0, 10, 0, false},
-		{"halt-height-edge", 11, 0, 10, 0, false},
-		{"halt-height-equal", 10, 0, 10, 0, true},
-		{"halt-height", 10, 0, 10, 0, true},
-		{"halt-time-edge", 0, 11, 1, 10, false},
-		{"halt-time-equal", 0, 10, 1, 10, true},
+		{"halt-height-edge", 10, 0, 10, 0, false},
+		{"halt-height", 10, 0, 11, 0, true},
+		{"halt-time-edge", 0, 10, 1, 10, false},
 		{"halt-time", 0, 10, 1, 11, true},
 	}
 
