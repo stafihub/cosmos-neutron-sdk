@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	coretypes "github.com/cometbft/cometbft/rpc/core/types"
@@ -58,6 +59,55 @@ func QueryTxsByEvents(clientCtx client.Context, page, limit int, query, orderBy 
 	}
 
 	return sdk.NewSearchTxsResult(uint64(resTxs.TotalCount), uint64(len(txs)), uint64(page), uint64(limit), txs), nil
+}
+
+// QueryTxsByEventsWithParseErrSkip return skip tx count in this page
+func QueryTxsByEventsWithParseErrSkip(clientCtx client.Context, events []string, page, limit int, orderBy string) (*sdk.SearchTxsResult, int, error) {
+	if len(events) == 0 {
+		return nil, 0, errors.New("must declare at least one event to search")
+	}
+	if page <= 0 {
+		return nil, 0, errors.New("page must greater than 0")
+	}
+	if limit <= 0 {
+		return nil, 0, errors.New("limit must greater than 0")
+	}
+	// XXX: implement ANY
+	query := strings.Join(events, " AND ")
+	node, err := clientCtx.GetNode()
+	if err != nil {
+		return nil, 0, err
+	}
+	// TODO: this may not always need to be proven
+	// https://github.com/cosmos/cosmos-sdk/issues/6807
+	resTxs, err := node.TxSearch(context.Background(), query, true, &page, &limit, orderBy)
+	if err != nil {
+		return nil, 0, err
+	}
+	resBlocks, err := getBlocksForTxResults(clientCtx, resTxs.Txs)
+	if err != nil {
+		return nil, 0, err
+	}
+	txs, skipCount, err := formatTxResultsWithParseErrSkip(clientCtx.TxConfig, resTxs.Txs, resBlocks)
+	if err != nil {
+		return nil, 0, err
+	}
+	result := sdk.NewSearchTxsResult(uint64(resTxs.TotalCount), uint64(len(txs)), uint64(page), uint64(limit), txs)
+	return result, skipCount, nil
+}
+
+func formatTxResultsWithParseErrSkip(txConfig client.TxConfig, resTxs []*coretypes.ResultTx, resBlocks map[int64]*coretypes.ResultBlock) ([]*sdk.TxResponse, int, error) {
+	skipCount := 0
+	out := make([]*sdk.TxResponse, 0)
+	for i := range resTxs {
+		o, err := mkTxResult(txConfig, resTxs[i], resBlocks[resTxs[i].Height])
+		if err != nil {
+			skipCount++
+			continue
+		}
+		out = append(out, o)
+	}
+	return out, skipCount, nil
 }
 
 // QueryTx queries for a single transaction by a hash string in hex format. An
